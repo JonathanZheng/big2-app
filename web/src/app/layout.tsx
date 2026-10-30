@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
 import { ACCENT_BOOT_SCRIPT } from "@/lib/theme";
@@ -37,6 +38,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-10 py-8">
           {children}
         </main>
+        <footer className="w-full max-w-7xl mx-auto px-4 sm:px-10 pb-8">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 border-t-4 border-ink pt-4 font-mono text-xs">
+            <Link href="/rules" className="font-semibold underline underline-offset-4">RULES AND HOW TO READ THE BOT</Link>
+            <Link href="/profile" className="font-semibold underline underline-offset-4">PROFILE</Link>
+          </div>
+        </footer>
       </body>
     </html>
   );
