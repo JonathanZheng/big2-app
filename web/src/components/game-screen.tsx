@@ -11,7 +11,7 @@ import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
 import {
-  type SortMode, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand,
+  type SortMode, comboAnchor, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand,
 } from "@/lib/hand/sort";
 import { rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
@@ -211,11 +211,11 @@ function Game({ initial, getClient, onNewMatch }: {
   }, [getClient, game, myTurn]);
 
   const cycleCombos = useCallback(() => {
-    const combos = combosContaining(lastTapped, legal);
+    const combos = combosContaining(comboAnchor(selected, lastTapped), legal);
     if (combos.length === 0) return;
     comboIndex.current = (comboIndex.current + 1) % combos.length;
     setSelected(combos[comboIndex.current]);
-  }, [lastTapped, legal]);
+  }, [lastTapped, legal, selected]);
 
   const applySort = useCallback((mode: Exclude<SortMode, "manual">) => {
     setUndoOrder(shownOrder);

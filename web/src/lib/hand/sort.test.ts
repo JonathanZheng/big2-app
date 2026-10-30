@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCards } from "@/lib/engine/cards";
-import { combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand } from "./sort";
+import { comboAnchor, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand } from "./sort";
 
 const hand = parseCards("2c Kd 9s 3c 4h Qd 9h 5s 6d Jd 7c 9d 3d");
 
@@ -58,5 +58,13 @@ describe("sort preference", () => {
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } });
     expect(() => saveSortPreference("suit")).not.toThrow();
     expect(readSortPreference()).toBe("rank");
+  });
+});
+
+describe("comboAnchor", () => {
+  it("uses the last tapped card only while it is selected", () => {
+    expect(comboAnchor([4, 7], 7)).toBe(7);
+    expect(comboAnchor([4], 7)).toBeNull(); // the tapped card was played or deselected
+    expect(comboAnchor([], null)).toBeNull();
   });
 });

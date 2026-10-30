@@ -68,6 +68,11 @@ export function groupCards(order: Card[], group: Card[]): Card[] {
   return result;
 }
 
+/** The card Combos cycles around: the last tapped card while it is still selected. */
+export function comboAnchor(selected: Card[], lastTapped: Card | null): Card | null {
+  return lastTapped !== null && selected.includes(lastTapped) ? lastTapped : null;
+}
+
 /** Legal plays holding `card`, or every legal play when no card is chosen. */
 export function combosContaining(card: Card | null, legal: Card[][]): Card[][] {
   return legal.filter((m) => m.length > 0 && (card === null || m.includes(card)));
