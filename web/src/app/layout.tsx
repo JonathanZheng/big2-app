@@ -42,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </main>
         <footer className="w-full max-w-7xl mx-auto px-4 sm:px-10 pb-8">
           <div className="flex flex-wrap gap-x-6 gap-y-2 border-t-4 border-ink pt-4 font-mono text-xs">
+            <Link href="/puzzle" className="font-semibold underline underline-offset-4">DAILY PUZZLE</Link>
             <Link href="/rules" className="font-semibold underline underline-offset-4">RULES AND HOW TO READ THE BOT</Link>
             <Link href="/profile" className="font-semibold underline underline-offset-4">PROFILE</Link>
           </div>

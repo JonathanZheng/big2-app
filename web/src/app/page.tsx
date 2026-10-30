@@ -17,6 +17,13 @@ export default function Home() {
         ))}
       </div>
       <Link
+        href="/puzzle"
+        className="flex flex-wrap items-center justify-between gap-3 border-3 border-ink bg-accent p-5 shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform"
+      >
+        <span className="text-2xl font-black tracking-tight">DAILY PUZZLE</span>
+        <span className="font-mono text-xs">A NEW POSITION EVERY DAY. FIND THE BOT&apos;S BEST MOVE.</span>
+      </Link>
+      <Link
         href="/rules"
         className="flex flex-wrap items-center justify-between gap-3 border-3 border-ink bg-ink text-paper p-5 shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-transform"
       >
