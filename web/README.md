@@ -2,7 +2,13 @@
 
 Next.js 16, React 19 and Tailwind 4. The design is in `../docs/superpowers/specs/2026-10-30-web-app-design.md`.
 
-Current state: the Swiss brutal theme, the header and a page for each mode (vs bots, vs friends, best move). The modes are not built yet.
+Current state: vs bots is playable. Vs friends and Best move are not built yet.
+
+- `src/lib/engine`: the game rules, legal moves and game state, checked against positions exported from the Python engine
+- `src/lib/model`: the trained model's input encoding and network (weights in `public/model/`), run in a Web Worker, plus the evaluation and move labels
+- `src/lib/bots`: Easy (greedy) and Medium (Smart) bots; Hard uses the model
+- `src/lib/hand`, `src/lib/session`: sorting, matches, history and browser stats
+- `src/components`: the game screen and its parts
 
 ## Run locally
 
@@ -12,6 +18,7 @@ Requires Node 20.9 or later.
 cd web
 npm install
 npm run dev      # http://localhost:3000
+npm test         # Vitest
 npm run lint
 npm run build
 ```
