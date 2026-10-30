@@ -11,9 +11,13 @@ export type AdviceStatus =
 const formatEval = (v: number) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
 
 /** The evaluation bar and every option, best first. */
-export function AdvicePanel({ status, onPick }: { status: AdviceStatus; onPick: (cards: Card[]) => void }) {
+export function AdvicePanel({ status, onPick, idleText }: {
+  status: AdviceStatus;
+  onPick: (cards: Card[]) => void;
+  idleText?: string;
+}) {
   if (status.kind === "idle") {
-    return <p className="p-4 font-mono text-sm">PRESS HINT (H) ON YOUR TURN TO SEE THE BEST MOVES.</p>;
+    return <p className="p-4 font-mono text-sm">{idleText ?? "PRESS HINT (H) ON YOUR TURN TO SEE THE BEST MOVES."}</p>;
   }
   if (status.kind === "loading") return <p className="p-4 font-mono text-sm">THINKING...</p>;
   if (status.kind === "error") return <p className="p-4 font-mono text-sm">{status.message}</p>;

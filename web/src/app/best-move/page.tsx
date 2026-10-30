@@ -1,7 +1,5 @@
-import { ComingSoon } from "@/components/coming-soon";
-import { MODES } from "@/lib/modes";
+import { BestMoveScreen } from "@/components/best-move-screen";
 
 export default function Page() {
-  const mode = MODES[2];
-  return <ComingSoon title={mode.label} summary={mode.summary} />;
+  return <BestMoveScreen />;
 }

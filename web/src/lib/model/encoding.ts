@@ -39,6 +39,15 @@ export function encodeState(state: GameState, player: number): Float32Array {
       if (rel > 0) x[PLAYED + (rel - 1) * 52 + c] = 1;
     }
   }
+  // Board setup knows who played some cards but not when they were played.
+  (state.playedBy ?? []).forEach((cards, seat) => {
+    const rel = relative(seat, player);
+    for (const c of cards) {
+      seen[c] = 1;
+      if (rel > 0) x[PLAYED + (rel - 1) * 52 + c] = 1;
+    }
+  });
+  for (const c of state.dead ?? []) seen[c] = 1;
   for (let c = 0; c < 52; c++) x[UNSEEN + c] = 1 - seen[c];
 
   if (state.lastPlay) {

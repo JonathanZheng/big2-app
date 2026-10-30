@@ -16,6 +16,14 @@ export interface GameState {
   passes: number;
   history: Play[];
   winner: number | null;
+  /**
+   * Cards each seat is known to have played. The board editor knows who played
+   * which cards but not the order, so these fill the model's played-by-seat
+   * inputs without inventing a move history.
+   */
+  playedBy?: Card[][];
+  /** Cards known to be out of the game with no owner (board setup only). */
+  dead?: Card[];
 }
 
 /** A position exported by scripts/export_web_fixtures.py. */
