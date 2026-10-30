@@ -20,6 +20,7 @@ import {
   type GameMode, type MatchConfig, type MatchState, endMatch, humanSeats, isBotSeat, matchWinners, nextGame,
   playMove, seatNames, startMatch,
 } from "@/lib/session/match";
+import { gameRecord, saveGameRecord } from "@/lib/session/profile";
 import { recordGame, recordMatch } from "@/lib/session/stats";
 
 type ModelStatus = "loading" | "ready" | "failed";
@@ -350,11 +351,15 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   // Record each finished game and each finished match exactly once. One-device
   // games are shared, so they do not count towards any player's stats.
   const recordedGame = useRef<GameState | null>(null);
+  // Turns of the current game on which a hint was asked for.
+  const hintTurns = useRef(new Set<GameState>());
   useEffect(() => {
     if (friends || game.winner === null || recordedGame.current === game) return;
     recordedGame.current = game;
     recordGame(game.winner === 0);
-  }, [friends, game]);
+    saveGameRecord(gameRecord(game, 0, config.difficulty, hintTurns.current.size, Date.now()));
+    hintTurns.current = new Set();
+  }, [config.difficulty, friends, game]);
 
   const recordedMatch = useRef<MatchState | null>(null);
   useEffect(() => {
@@ -388,6 +393,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const hint = useCallback(async () => {
     setTab("advice");
     if (!myTurn || handSeat === null) return;
+    hintTurns.current.add(game);
     const client = getClient();
     if (!client) return setAdviceFor({ game, seat: handSeat, status: { kind: "error", message: MODEL_FAILED } });
     setAdviceFor({ game, seat: handSeat, status: { kind: "loading" } });

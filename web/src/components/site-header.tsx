@@ -13,6 +13,7 @@ export function SiteHeader() {
         <Link href="/" className="text-5xl font-black tracking-tighter leading-none">
           BIG 2
         </Link>
+        <div className="flex flex-wrap gap-3">
         <nav aria-label="Modes" className="flex border-3 border-ink">
           {MODES.map((mode, i) => {
             const active = pathname.startsWith(mode.href);
@@ -28,6 +29,16 @@ export function SiteHeader() {
             );
           })}
         </nav>
+        <Link
+          href="/profile"
+          aria-current={pathname.startsWith("/profile") ? "page" : undefined}
+          className={`px-4 py-3 text-sm font-extrabold border-3 border-ink ${
+            pathname.startsWith("/profile") ? "bg-accent" : "bg-paper hover:bg-card"
+          }`}
+        >
+          PROFILE
+        </Link>
+        </div>
       </div>
     </header>
   );
