@@ -9,10 +9,35 @@ import { type GameState, applyMove, deal, mulberry32 } from "@/lib/engine/game";
 
 export const SEAT_NAMES = ["You", "West", "North", "East"];
 
+export type GameMode = "bots" | "friends";
+
 export interface MatchConfig {
   difficulty: Difficulty;
   /** 1 is a single game. */
   games: 1 | 3 | 5 | 10;
+  /** Defaults to bots for the original vs bots mode. */
+  mode?: GameMode;
+  /** Human seats at one device, from seat 0 up. Defaults to 1. */
+  humans?: number;
+}
+
+/** Seats occupied by people. Bots fill the empty seats after them. */
+export function humanSeats(config: MatchConfig): number[] {
+  const count = config.mode === "friends" ? Math.max(1, Math.min(4, config.humans ?? 4)) : 1;
+  return Array.from({ length: count }, (_, seat) => seat);
+}
+
+export function isBotSeat(config: MatchConfig, seat: number): boolean {
+  return !humanSeats(config).includes(seat);
+}
+
+/** Names for the scoreboard and table. */
+export function seatNames(config: MatchConfig): string[] {
+  if (config.mode !== "friends") return [...SEAT_NAMES];
+  const humans = humanSeats(config).length;
+  return Array.from({ length: 4 }, (_, seat) =>
+    seat < humans ? `Player ${seat + 1}` : `Bot ${seat - humans + 1}`,
+  );
 }
 
 export interface MatchState {
