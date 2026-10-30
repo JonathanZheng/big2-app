@@ -93,6 +93,19 @@ describe("boardToGame", () => {
 });
 
 describe("checkBoard", () => {
+  it("asks for the hand first on an empty board, without other messages", () => {
+    const check = checkBoard(EMPTY_BOARD);
+    expect(check.errors).toEqual(["Mark the cards in your hand first."]);
+    expect(check.warnings).toEqual([]);
+  });
+
+  it("explains a count mismatch in terms of the other players' cards", () => {
+    const board: Board = { ...boardWith("3d 4c", { west: "5d" }), counts: [13, 13, 13] };
+    expect(checkBoard(board).warnings[0]).toBe(
+      "Your counts give the other players 39 cards, but 49 cards are not in your hand or marked as played. Advice may be less accurate.",
+    );
+  });
+
   it("accepts a legal trick", () => {
     let board = boardWith("4c 6c", { west: "3d 5d 5c" }, "7d");
     board = { ...board, lastPlayer: 1, lastCards: parseCards("5d 5c") };
