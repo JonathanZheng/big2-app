@@ -28,11 +28,13 @@ export function AccentPicker() {
           role="radio"
           aria-checked={accent === a.id}
           onClick={() => choose(a.id)}
-          className={`flex items-center gap-2 border-3 border-ink bg-card px-3 py-2 font-extrabold text-xs ${
-            accent === a.id ? "shadow-brutal outline-3 outline-offset-2 outline-ink" : "shadow-brutal-sm"
+          // The chosen swatch is pressed into its shadow and turns black, so no outline
+          // is needed to mark it.
+          className={`flex items-center gap-2 border-3 border-ink px-3 py-2 font-extrabold text-xs transition-transform ${
+            accent === a.id ? "translate-x-1 translate-y-1 bg-ink text-paper" : "bg-card shadow-brutal-sm hover:-translate-y-0.5"
           }`}
         >
-          <span aria-hidden className="h-6 w-6 border-2 border-ink" style={{ background: a.accent }} />
+          <span aria-hidden className="h-6 w-6 border-2 border-current" style={{ background: a.accent }} />
           {a.name}
         </button>
       ))}
