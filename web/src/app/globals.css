@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Swiss brutal: off-white paper, black ink, one bright accent. */
+:root {
+  --paper: #f2f0ea;
+  --ink: #111111;
+  --card: #ffffff;
+  --accent: #ff5a1f;
+  --suit-red: #c8102e;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-suit-red: var(--suit-red);
+  --font-sans: var(--font-archivo);
+  --font-mono: var(--font-plex-mono);
+  --shadow-brutal: 6px 6px 0 var(--ink);
+  --shadow-brutal-sm: 4px 4px 0 var(--ink);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
