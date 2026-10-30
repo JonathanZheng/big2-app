@@ -28,17 +28,34 @@ export class Network {
   ) {}
 
   static fromBuffers(manifest: WeightsManifest, buffer: ArrayBuffer): Network {
+    if (buffer.byteLength % 4 !== 0) throw new Error("Model weights are not float32 data");
     const all = new Float32Array(buffer);
-    const layer = (name: string) => {
+    if (all.length === 0) throw new Error("Model weights are empty");
+    for (const value of all) {
+      if (!Number.isFinite(value)) throw new Error("Model weights contain invalid numbers");
+    }
+
+    const layer = (name: string, expected: number) => {
       const entry = manifest.layers.find((l) => l.name === name);
       if (!entry) throw new Error(`Missing layer ${name}`);
       const size = entry.shape.reduce((a, b) => a * b, 1);
+      if (!Number.isInteger(entry.offset) || entry.offset < 0 || entry.offset + size > all.length) {
+        throw new Error(`Model layer ${name} is outside the weights file`);
+      }
+      if (size !== expected) throw new Error(`Model layer ${name} has the wrong size`);
       return all.subarray(entry.offset, entry.offset + size);
     };
+
     return new Network(
-      layer("state_in.weight"), layer("state_in.bias"), layer("move_in.weight"),
-      layer("fc2.weight"), layer("fc2.bias"), layer("fc3.weight"), layer("fc3.bias"),
-      layer("out.weight"), layer("out.bias")[0],
+      layer("state_in.weight", H1 * STATE_DIM),
+      layer("state_in.bias", H1),
+      layer("move_in.weight", H1 * MOVE_DIM),
+      layer("fc2.weight", H2 * H1),
+      layer("fc2.bias", H2),
+      layer("fc3.weight", H3 * H2),
+      layer("fc3.bias", H3),
+      layer("out.weight", H3),
+      layer("out.bias", 1)[0],
     );
   }
 
@@ -76,6 +93,7 @@ export class Network {
       }
       scores[m] = score;
     });
+    if (!scores.every(Number.isFinite)) throw new Error("Model produced an invalid score");
     return scores;
   }
 }
