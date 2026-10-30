@@ -7,11 +7,11 @@ export const MODES = [
   {
     href: "/friends",
     label: "VS FRIENDS",
-    summary: "Pass one device around the table, or play online with a room link.",
+    summary: "Pass one device around the table. Bots fill any empty seats.",
   },
   {
     href: "/best-move",
     label: "BEST MOVE",
-    summary: "Enter a position from a real game and the bot ranks your options.",
+    summary: "Set up a position, or follow a real game as it happens, and the bot ranks your options.",
   },
 ] as const;
