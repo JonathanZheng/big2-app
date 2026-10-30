@@ -57,11 +57,15 @@ export function CardGrid({ board, onCard, highlight = [], tableCards = [], selec
               onClick={() => onCard(card)}
               className={`relative min-h-11 px-1 py-0.5 text-left font-mono leading-none border-0 ${
                 picked ? "bg-picked" : owner === "mine" ? "bg-accent" : owner === "unseen" ? "bg-card" : owner === "out" ? "bg-paper" : "bg-ink"
-              } ${dark && !picked ? "text-paper" : "text-ink"} ${disabled ? "opacity-30" : ""} ${
-                picked ? "outline-3 -outline-offset-3 outline-ink" : pointed ? "outline-3 -outline-offset-2 outline-suit-red" : ""
+              } ${dark && !picked ? "text-paper" : "text-ink"} ${
+                // Fade only the text: fading the cell would let the black grid lines show through it.
+                // Your own cards stay fully readable; they just cannot be picked for another player.
+                disabled ? `cursor-not-allowed ${owner === "mine" ? "" : "[&>span]:opacity-45"}` : ""
+              } ${
+                picked ? "outline-2 -outline-offset-2 outline-ink" : pointed ? "outline-3 -outline-offset-2 outline-suit-red" : ""
               }`}
             >
-              <span className={`block text-sm font-black ${isRed(card) && !dark && !picked ? "text-suit-red" : ""}`}>
+              <span className={`block text-sm font-black ${isRed(card) && !dark && !picked && owner !== "mine" ? "text-suit-red" : ""}`}>
                 {name}{symbol}
               </span>
               <span className={`mt-1 block truncate text-[9px] ${owner === "out" ? "opacity-50" : ""}`}>
