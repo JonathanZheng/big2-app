@@ -8,7 +8,7 @@ export function SiteHeader() {
   const pathname = usePathname();
 
   return (
-    <header className="w-full max-w-6xl mx-auto px-4 sm:px-10">
+    <header className="w-full max-w-7xl mx-auto px-4 sm:px-10">
       <div className="flex flex-wrap items-center justify-between gap-4 py-5 border-b-4 border-ink">
         <Link href="/" className="text-5xl font-black tracking-tighter leading-none">
           BIG 2
