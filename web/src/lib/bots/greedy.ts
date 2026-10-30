@@ -112,14 +112,13 @@ function breaksCombination(move: Card[], analysis: HandAnalysis): boolean {
 const maxRank = (move: Card[]) => (move.length === 0 ? -1 : Math.max(...move.map(rank)));
 
 function scoreMove(move: Card[], analysis: HandAnalysis, situation: Situation): number {
-  const type = detectMoveType(move);
   const avgRank = move.reduce((sum, c) => sum + rank(c), 0) / move.length;
   let score = (12 - avgRank) * 15;
   if (breaksCombination(move, analysis)) score -= 15;
   score += move.length * 3;
   if (situation.handSize <= 3) score += 50;
   if (move.some((c) => rank(c) >= 10) && lastMoveStrength(situation) < 0.5) score -= 10;
-  if (move.length === 5) score += 20;
+  if (move.length === 5) score += 20; // every legal five-card play is a straight or better
   if (situation.minOpponentCards <= 2) score += 25;
   return score;
 }
