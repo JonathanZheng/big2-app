@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -153,9 +153,9 @@ activemq-data/
 .env
 .envrc
 .venv
-env/
+/env/
 venv/
-ENV/
+/ENV/
 env.bak/
 venv.bak/
 
@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Training runs (the chosen model is committed in models/)
+checkpoints/
+
+# macOS
+.DS_Store
