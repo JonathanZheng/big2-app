@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
+import { ACCENT_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -25,7 +26,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
+      // The saved accent is set on <html> before React loads.
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col font-sans">
         <SiteHeader />
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-10 py-8">

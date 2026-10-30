@@ -11,6 +11,13 @@
   --picked: #ffd400;
 }
 
+/* Accent choices (see src/lib/theme.ts); orange is the default above. */
+:root[data-accent="yellow"] { --accent: #ffd400; --picked: #00c2a8; }
+:root[data-accent="green"] { --accent: #00c2a8; --picked: #ffd400; }
+:root[data-accent="blue"] { --accent: #4d8bff; --picked: #ffd400; }
+:root[data-accent="pink"] { --accent: #ff5ca8; --picked: #ffd400; }
+:root[data-accent="violet"] { --accent: #a78bfa; --picked: #ffd400; }
+
 @theme inline {
   --color-paper: var(--paper);
   --color-ink: var(--ink);

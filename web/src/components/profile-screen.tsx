@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AccentPicker } from "@/components/accent-picker";
 import { ReviewPanel } from "@/components/review-panel";
 import { SUIT_SYMBOLS } from "@/lib/engine/cards";
 import { MoveType } from "@/lib/engine/moves";
@@ -71,45 +72,6 @@ export function ProfileScreen() {
           </button>
         ))}
       </div>
-
-      <Section title="SAVED REVIEWS">
-        {reviews.length === 0 ? (
-          <p className="font-mono text-sm">NO SAVED REVIEWS. AFTER A GAME, OPEN REVIEW AND PRESS SAVE REVIEW.</p>
-        ) : (
-          <ul className="flex flex-col">
-            {reviews.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink/20 py-2.5">
-                <span className="flex flex-col">
-                  <span className="font-extrabold text-sm">{r.title}</span>
-                  <span className="font-mono text-[11px]">
-                    {new Date(r.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}
-                    {" · "}{r.final.history.length} MOVES
-                  </span>
-                </span>
-                <span className="flex gap-2">
-                  <button type="button" onClick={() => setOpen(r)} className={`${button} px-3 py-2 text-xs bg-accent shadow-brutal-sm`}>OPEN</button>
-                  <button type="button" className={`${button} px-3 py-2 text-xs bg-card shadow-brutal-sm`}
-                    onClick={() => { deleteSavedReview(r.id); setVersion((v) => v + 1); }}>DELETE</button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      {open && (
-        <ReviewPanel
-          final={open.final}
-          getClient={getClient}
-          onClose={() => setOpen(null)}
-          names={open.names}
-          seats={open.seats}
-          youSeat={open.youSeat}
-          players={open.players}
-          scoreAll={open.scoreAll}
-          saved
-        />
-      )}
 
       {p.games === 0 ? (
         <section className="border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-4 items-start">
@@ -198,6 +160,50 @@ export function ProfileScreen() {
             </div>
           </Section>
         </>
+      )}
+
+      <Section title="COLOUR">
+        <p className="font-mono text-xs">USED FOR YOUR CARDS, ACTIVE TABS AND MAIN BUTTONS. SAVED IN THIS BROWSER.</p>
+        <AccentPicker />
+      </Section>
+
+      <Section title="SAVED REVIEWS">
+        {reviews.length === 0 ? (
+          <p className="font-mono text-sm">NO SAVED REVIEWS. AFTER A GAME, OPEN REVIEW AND PRESS SAVE REVIEW.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {reviews.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink/20 py-2.5">
+                <span className="flex flex-col">
+                  <span className="font-extrabold text-sm">{r.title}</span>
+                  <span className="font-mono text-[11px]">
+                    {new Date(r.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}
+                    {" · "}{r.final.history.length} MOVES
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  <button type="button" onClick={() => setOpen(r)} className={`${button} px-3 py-2 text-xs bg-accent shadow-brutal-sm`}>OPEN</button>
+                  <button type="button" className={`${button} px-3 py-2 text-xs bg-card shadow-brutal-sm`}
+                    onClick={() => { deleteSavedReview(r.id); setVersion((v) => v + 1); }}>DELETE</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {open && (
+        <ReviewPanel
+          final={open.final}
+          getClient={getClient}
+          onClose={() => setOpen(null)}
+          names={open.names}
+          seats={open.seats}
+          youSeat={open.youSeat}
+          players={open.players}
+          scoreAll={open.scoreAll}
+          saved
+        />
       )}
     </div>
   );
