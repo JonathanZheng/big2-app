@@ -634,9 +634,15 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
             <p className="font-mono text-sm">
               TAP READY WHEN THE DEVICE IS WITH {names[game.current].toUpperCase()}. EVERY HAND IS HIDDEN.
             </p>
-            <button type="button" onClick={ready} className={`${button} self-start px-6 py-3 bg-accent shadow-brutal-sm`}>
-              READY
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={ready} className={`${button} px-6 py-3 bg-accent shadow-brutal-sm`}>
+                READY
+              </button>
+              <button type="button" onClick={() => setLeaving("restart")}
+                className={`${button} px-3 py-2 bg-card font-mono text-xs`}>RESTART</button>
+              <button type="button" onClick={() => setLeaving("exit")}
+                className={`${button} px-3 py-2 bg-card font-mono text-xs`}>EXIT</button>
+            </div>
           </section>
         </div>
       )}
