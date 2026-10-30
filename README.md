@@ -1,8 +1,8 @@
 # big2-app
 
-A Big 2 bot trained by self-play, and (soon) a web app to play against it and to get move suggestions for a real game. The bot is small enough to run in the browser.
+A Big 2 bot trained by self-play, and a web app to play against it, play with friends, and get move suggestions for a real game. The bot is small enough to run in the browser.
 
-The web app is not built yet. This repo currently holds the game engine, the trainer, the test opponents and the trained model.
+The web app in `web/` is set up but its modes are not built yet. See `web/README.md` for running and deploying it.
 
 ## The model
 
@@ -81,7 +81,8 @@ python3 train_selfplay.py --hours 8
 | `models/` | The current best model |
 | `tests/` | Rule tests |
 | `docs/training/` | Training run reports and their raw logs |
-| `docs/superpowers/` | Design document and project plan |
+| `web/` | The web app (Next.js) |
+| `docs/superpowers/` | Design documents and project plan |
 
 ## How the model works
 
