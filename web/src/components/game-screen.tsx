@@ -32,22 +32,22 @@ const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:
 
 /** Keyboard shortcuts must not fire while a form control or editable text has focus. */
 function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+  if (!(target instanceof HTMLElement)) return false;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
 }
 
 /** Links and ordinary buttons keep Enter for their own action. A hand card is the exception. */
 function isInteractive(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return !!el.closest("button, a, [role='button']");
+  return target instanceof Element && !!target.closest("button, a, [role='button']");
 }
 
 function isHandCard(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return !!el?.closest("[data-card]");
+  return target instanceof Element && !!target.closest("[data-card]");
 }
+
+/** The side column (and so the Best moves panel) shows from this width up. */
+const isWide = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+const action = "h-14 sm:h-16 text-lg sm:text-2xl shadow-brutal";
 
 const shortName = (name: string) => {
   if (name.startsWith("Player ")) return `P${name.slice(7)}`;
@@ -570,15 +570,13 @@ function Game({ initial, getClient, onNewMatch, names }: {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <button type="button" onClick={play} disabled={!canPlay}
-              className={`${button} h-16 text-2xl bg-accent shadow-brutal`}>PLAY</button>
+              className={`${button} ${action} bg-accent`}>PLAY</button>
             <button type="button" onClick={pass} disabled={!canPass}
-              className={`${button} h-16 text-2xl bg-card shadow-brutal`}>PASS</button>
+              className={`${button} ${action} bg-card`}>PASS</button>
             <button type="button" onClick={cycleCombos} disabled={!myTurn}
-              className={`${button} h-12 sm:h-16 bg-card shadow-brutal-sm`}>COMBOS</button>
-            <button type="button" onClick={() => { void hint(); setSheet("advice"); }} disabled={!myTurn}
-              className={`${button} h-12 sm:h-16 bg-card shadow-brutal-sm lg:hidden`}>HINT</button>
-            <button type="button" onClick={() => void hint()} disabled={!myTurn}
-              className={`${button} h-16 bg-card shadow-brutal-sm hidden lg:block`}>HINT</button>
+              className={`${button} ${action} bg-card`}>COMBOS</button>
+            <button type="button" onClick={() => { void hint(); if (!isWide()) setSheet("advice"); }} disabled={!myTurn}
+              className={`${button} ${action} bg-card`}>HINT</button>
             <button type="button" onClick={() => setSheet("history")}
               className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden col-span-2 sm:col-span-4`}>HISTORY</button>
           </div>
