@@ -1,0 +1,13 @@
+# Big 2 AI Requirements
+
+# Core dependencies
+torch>=2.0.0
+numpy>=1.24.0
+
+# Optional: For better performance on M3 Mac
+# (MPS support is built into PyTorch 2.0+)
+
+# Development dependencies (optional)
+pytest>=7.4.0
+black>=23.7.0
+flake8>=6.1.0
