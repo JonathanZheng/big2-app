@@ -46,6 +46,7 @@ export function CardGrid({ board, onCard, highlight = [], tableCards = [], selec
           const pointed = highlight.includes(card);
           const dark = owner === "west" || owner === "north" || owner === "east" || owner === "minePlayed";
           const disabled = disabledCards?.has(card) ?? false;
+          const picked = selected?.includes(card) ?? false;
           return (
             <button
               key={`card-${card}`}
@@ -55,16 +56,16 @@ export function CardGrid({ board, onCard, highlight = [], tableCards = [], selec
               disabled={disabled}
               onClick={() => onCard(card)}
               className={`relative min-h-11 px-1 py-0.5 text-left font-mono leading-none border-0 ${
-                owner === "mine" ? "bg-accent" : owner === "unseen" ? "bg-card" : owner === "out" ? "bg-paper" : "bg-ink"
-              } ${dark ? "text-paper" : "text-ink"} ${disabled ? "opacity-30" : ""} ${
-                pointed ? "outline-3 -outline-offset-2 outline-suit-red" : ""
+                picked ? "bg-picked" : owner === "mine" ? "bg-accent" : owner === "unseen" ? "bg-card" : owner === "out" ? "bg-paper" : "bg-ink"
+              } ${dark && !picked ? "text-paper" : "text-ink"} ${disabled ? "opacity-30" : ""} ${
+                picked ? "outline-3 -outline-offset-3 outline-ink" : pointed ? "outline-3 -outline-offset-2 outline-suit-red" : ""
               }`}
             >
-              <span className={`block text-sm font-black ${isRed(card) && !dark ? "text-suit-red" : ""}`}>
+              <span className={`block text-sm font-black ${isRed(card) && !dark && !picked ? "text-suit-red" : ""}`}>
                 {name}{symbol}
               </span>
               <span className={`mt-1 block truncate text-[9px] ${owner === "out" ? "opacity-50" : ""}`}>
-                {OWNER_SHORT[owner]}
+                {picked ? "PICKED" : OWNER_SHORT[owner]}
               </span>
               {inTrick && <span aria-hidden className="absolute inset-x-1 bottom-0 h-1 bg-accent" />}
             </button>

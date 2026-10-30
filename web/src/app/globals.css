@@ -7,6 +7,8 @@
   --card: #ffffff;
   --accent: #ff5a1f;
   --suit-red: #c8102e;
+  /* Cards picked while recording a move; distinct from the accent used for your hand. */
+  --picked: #ffd400;
 }
 
 @theme inline {
@@ -15,6 +17,7 @@
   --color-card: var(--card);
   --color-accent: var(--accent);
   --color-suit-red: var(--suit-red);
+  --color-picked: var(--picked);
   --font-sans: var(--font-archivo);
   --font-mono: var(--font-plex-mono);
   --shadow-brutal: 6px 6px 0 var(--ink);
