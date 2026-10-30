@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdvicePanel, type AdviceStatus } from "@/components/advice-panel";
 import { Hand } from "@/components/hand";
 import { HistoryPanel } from "@/components/history-panel";
+import { ReviewPanel } from "@/components/review-panel";
 import { Table } from "@/components/table";
 import { type Difficulty, botMove } from "@/lib/bots/bots";
 import { smartMove } from "@/lib/bots/smart";
@@ -16,9 +17,10 @@ import {
 import { rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
 import {
-  type MatchConfig, type MatchState, SEAT_NAMES, endMatch, matchWinners, nextGame, playMove, startMatch,
+  type GameMode, type MatchConfig, type MatchState, endMatch, humanSeats, isBotSeat, matchWinners, nextGame,
+  playMove, seatNames, startMatch,
 } from "@/lib/session/match";
-import { recordResult } from "@/lib/session/stats";
+import { recordGame, recordMatch } from "@/lib/session/stats";
 
 type ModelStatus = "loading" | "ready" | "failed";
 type Speed = "slow" | "normal" | "fast";
@@ -28,80 +30,172 @@ const key = (cards: Card[]) => [...cards].sort((a, b) => a - b).join(",");
 
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 
-export function GameScreen() {
+/** Keyboard shortcuts must not fire while a form control or editable text has focus. */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+}
+
+/** Links and ordinary buttons keep Enter for their own action. A hand card is the exception. */
+function isInteractive(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return !!el.closest("button, a, [role='button']");
+}
+
+function isHandCard(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el?.closest("[data-card]");
+}
+
+const shortName = (name: string) => {
+  if (name.startsWith("Player ")) return `P${name.slice(7)}`;
+  if (name.startsWith("Bot ")) return `B${name.slice(4)}`;
+  return name[0];
+};
+
+export function GameScreen({ mode = "bots" }: { mode?: GameMode }) {
   const client = useRef<ModelClient | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus>("loading");
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [modelAttempt, setModelAttempt] = useState(0);
   const [match, setMatch] = useState<MatchState | null>(null);
-
-  useEffect(() => {
-    const c = new ModelClient();
-    client.current = c;
-    c.ready.then(() => setModelStatus("ready"), () => setModelStatus("failed"));
-    return () => c.dispose();
+  const getClient = useCallback(() => (modelStatus === "failed" ? null : client.current), [modelStatus]);
+  const retryModel = useCallback(() => {
+    setModelStatus("loading");
+    setModelError(null);
+    setModelAttempt((n) => n + 1);
   }, []);
 
+  useEffect(() => {
+    let c: ModelClient;
+    try {
+      c = new ModelClient();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      queueMicrotask(() => {
+        setModelError(message);
+        setModelStatus("failed");
+      });
+      return;
+    }
+    client.current = c;
+    c.ready.then(
+      () => { setModelStatus("ready"); setModelError(null); },
+      (error: unknown) => {
+        console.error("Model failed to load", error);
+        setModelError(error instanceof Error ? error.message : String(error));
+        setModelStatus("failed");
+      },
+    );
+    return () => {
+      c.dispose();
+      if (client.current === c) client.current = null;
+    };
+  }, [modelAttempt]);
+
+  const start = (config: MatchConfig) => setMatch(startMatch(config, Date.now() % 1_000_000));
+
   if (!match) {
-    return <Setup modelStatus={modelStatus} onStart={(config) => setMatch(startMatch(config, Date.now() % 1_000_000))} />;
+    return mode === "friends"
+      ? <FriendsSetup modelStatus={modelStatus} modelError={modelError} onRetry={retryModel} onStart={start} />
+      : <BotsSetup modelStatus={modelStatus} modelError={modelError} onRetry={retryModel} onStart={start} />;
   }
   return (
     <Game
       key={match.seed}
       initial={match}
-      getClient={() => (modelStatus === "failed" ? null : client.current)}
+      names={seatNames(match.config)}
+      getClient={getClient}
       onNewMatch={() => setMatch(null)}
     />
   );
 }
 
-function Setup({ modelStatus, onStart }: { modelStatus: ModelStatus; onStart: (c: MatchConfig) => void }) {
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [games, setGames] = useState<MatchConfig["games"]>(5);
+function DifficultyPicker({ difficulty, setDifficulty, modelStatus, modelError, onRetry }: {
+  difficulty: Difficulty;
+  setDifficulty: (d: Difficulty) => void;
+  modelStatus: ModelStatus;
+  modelError: string | null;
+  onRetry: () => void;
+}) {
   const levels: [Difficulty, string, string][] = [
     ["easy", "EASY", "Greedy bots"],
     ["medium", "MEDIUM", "Smart bots"],
     ["hard", "HARD", "The trained model"],
   ];
   return (
+    <fieldset className="flex flex-col gap-3">
+      <legend className="text-sm font-extrabold mb-3">BOT DIFFICULTY</legend>
+      <div className="grid sm:grid-cols-3 gap-4">
+        {levels.map(([value, label, note]) => {
+          const disabled = value === "hard" && modelStatus !== "ready";
+          return (
+            <button
+              key={value}
+              type="button"
+              disabled={disabled}
+              aria-pressed={difficulty === value}
+              onClick={() => setDifficulty(value)}
+              className={`${button} p-4 text-left shadow-brutal ${difficulty === value ? "bg-accent" : "bg-card"}`}
+            >
+              <span className="block text-2xl font-black">{label}</span>
+              <span className="block font-mono text-xs mt-2">{note}</span>
+            </button>
+          );
+        })}
+      </div>
+      {modelStatus === "loading" && <p className="font-mono text-sm">MODEL LOADING. HARD UNLOCKS WHEN IT IS READY.</p>}
+      {modelStatus === "ready" && <p className="font-mono text-sm">MODEL READY. HARD AND HINTS ARE ON.</p>}
+      {modelStatus === "failed" && (
+        <div className="flex flex-col items-start gap-2">
+          <p className="font-mono text-sm">{MODEL_FAILED}</p>
+          {modelError && <p className="font-mono text-xs opacity-70">{modelError}</p>}
+          <button type="button" onClick={onRetry} className={`${button} px-3 py-2 text-xs bg-paper`}>
+            TRY AGAIN
+          </button>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+function LengthPicker({ games, setGames }: { games: MatchConfig["games"]; setGames: (g: MatchConfig["games"]) => void }) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-extrabold mb-3">LENGTH</legend>
+      <div className="flex flex-wrap gap-3">
+        {([1, 3, 5, 10] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={games === n}
+            onClick={() => setGames(n)}
+            className={`${button} px-4 py-3 shadow-brutal-sm ${games === n ? "bg-accent" : "bg-card"}`}
+          >
+            {n === 1 ? "SINGLE GAME" : `${n} GAMES`}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function BotsSetup({ modelStatus, modelError, onRetry, onStart }: {
+  modelStatus: ModelStatus;
+  modelError: string | null;
+  onRetry: () => void;
+  onStart: (c: MatchConfig) => void;
+}) {
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [games, setGames] = useState<MatchConfig["games"]>(5);
+  return (
     <section className="flex flex-col gap-8 max-w-3xl">
       <h1 className="text-5xl font-black tracking-tight leading-none">VS BOTS</h1>
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-extrabold mb-3">DIFFICULTY</legend>
-        <div className="grid sm:grid-cols-3 gap-4">
-          {levels.map(([value, label, note]) => {
-            const disabled = value === "hard" && modelStatus === "failed";
-            return (
-              <button
-                key={value}
-                type="button"
-                disabled={disabled}
-                aria-pressed={difficulty === value}
-                onClick={() => setDifficulty(value)}
-                className={`${button} p-4 text-left shadow-brutal ${difficulty === value ? "bg-accent" : "bg-card"}`}
-              >
-                <span className="block text-2xl font-black">{label}</span>
-                <span className="block font-mono text-xs mt-2">{note}</span>
-              </button>
-            );
-          })}
-        </div>
-        {modelStatus === "failed" && <p className="font-mono text-sm">{MODEL_FAILED}</p>}
-      </fieldset>
-      <fieldset>
-        <legend className="text-sm font-extrabold mb-3">LENGTH</legend>
-        <div className="flex flex-wrap gap-3">
-          {([1, 3, 5, 10] as const).map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-pressed={games === n}
-              onClick={() => setGames(n)}
-              className={`${button} px-4 py-3 shadow-brutal-sm ${games === n ? "bg-accent" : "bg-card"}`}
-            >
-              {n === 1 ? "SINGLE GAME" : `${n} GAMES`}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <DifficultyPicker difficulty={difficulty} setDifficulty={setDifficulty} modelStatus={modelStatus}
+        modelError={modelError} onRetry={onRetry} />
+      <LengthPicker games={games} setGames={setGames} />
       <button
         type="button"
         onClick={() => onStart({ difficulty, games })}
@@ -113,46 +207,117 @@ function Setup({ modelStatus, onStart }: { modelStatus: ModelStatus; onStart: (c
   );
 }
 
-function Game({ initial, getClient, onNewMatch }: {
-  initial: MatchState; getClient: () => ModelClient | null; onNewMatch: () => void;
+function FriendsSetup({ modelStatus, modelError, onRetry, onStart }: {
+  modelStatus: ModelStatus;
+  modelError: string | null;
+  onRetry: () => void;
+  onStart: (c: MatchConfig) => void;
 }) {
+  const [humans, setHumans] = useState(4);
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [games, setGames] = useState<MatchConfig["games"]>(5);
+  return (
+    <section className="flex flex-col gap-8 max-w-3xl">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-5xl font-black tracking-tight leading-none">VS FRIENDS</h1>
+        <p className="font-mono text-sm leading-relaxed">
+          ONE DEVICE, PASSED AROUND THE TABLE. THE HAND-OFF SCREEN HIDES EVERY HAND. EMPTY SEATS
+          FILL WITH BOTS.
+        </p>
+      </div>
+      <fieldset>
+        <legend className="text-sm font-extrabold mb-3">HOW MANY PEOPLE</legend>
+        <div className="flex flex-wrap gap-3">
+          {[2, 3, 4].map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={humans === n}
+              onClick={() => setHumans(n)}
+              className={`${button} px-4 py-3 shadow-brutal-sm ${humans === n ? "bg-accent" : "bg-card"}`}
+            >
+              {n} PEOPLE
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 font-mono text-xs">
+          {humans === 4 ? "FOUR PEOPLE, NO BOTS." : `${4 - humans} BOT${humans === 3 ? "" : "S"} FILL THE EMPTY SEATS.`}
+        </p>
+      </fieldset>
+      {humans < 4 && (
+        <DifficultyPicker difficulty={difficulty} setDifficulty={setDifficulty} modelStatus={modelStatus}
+          modelError={modelError} onRetry={onRetry} />
+      )}
+      <LengthPicker games={games} setGames={setGames} />
+      <button
+        type="button"
+        onClick={() => onStart({ mode: "friends", humans, difficulty, games })}
+        className={`${button} self-start bg-ink text-paper text-2xl px-8 py-4 shadow-brutal`}
+      >
+        START
+      </button>
+    </section>
+  );
+}
+
+function Game({ initial, getClient, onNewMatch, names }: {
+  initial: MatchState;
+  getClient: () => ModelClient | null;
+  onNewMatch: () => void;
+  names: string[];
+}) {
+  const config = initial.config;
+  const friends = config.mode === "friends";
+  const humans = useMemo(() => humanSeats(config), [config]);
+
   const [match, setMatch] = useState(initial);
   const [speed, setSpeed] = useState<Speed>("normal");
   const [sortMode, setSortMode] = useState<SortMode>(() => readSortPreference());
-  const [order, setOrder] = useState<Card[]>(() => sortHand(initial.game.hands[0], sortMode === "manual" ? "rank" : sortMode));
+  const [orders, setOrders] = useState<Record<number, Card[]>>({});
   const [undoOrder, setUndoOrder] = useState<Card[] | null>(null);
   const [groups, setGroups] = useState<Card[][]>([]);
   const [selected, setSelected] = useState<Card[]>([]);
   const [lastTapped, setLastTapped] = useState<Card | null>(null);
   const comboIndex = useRef(-1);
-  // Advice belongs to the position it was asked for.
-  const [adviceFor, setAdviceFor] = useState<{ game: GameState; status: AdviceStatus } | null>(null);
+  const [adviceFor, setAdviceFor] = useState<{ game: GameState; seat: number; status: AdviceStatus } | null>(null);
   const [tab, setTab] = useState<"advice" | "history">("advice");
   const [sheet, setSheet] = useState<"advice" | "history" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
 
   const game = match.game;
-  const hand = game.hands[0];
-  const myTurn = game.winner === null && game.current === 0;
-  const legal = useMemo(() => (myTurn ? legalMoves(game, 0) : []), [game, myTurn]);
+  const handSeat = friends
+    ? (game.winner === null && viewer !== null && viewer === game.current ? viewer : null)
+    : 0;
+  const hand = useMemo(() => (handSeat === null ? [] : game.hands[handSeat]), [game, handSeat]);
+  const myTurn = handSeat !== null && game.winner === null && game.current === handSeat;
+  const legal = useMemo(() => (handSeat !== null && myTurn ? legalMoves(game, handSeat) : []), [game, handSeat, myTurn]);
   const legalKeys = useMemo(() => new Set(legal.map(key)), [legal]);
   const playable = useMemo(() => new Set(legal.flat()), [legal]);
   const canPlay = myTurn && selected.length > 0 && legalKeys.has(key(selected));
   const canPass = myTurn && legalKeys.has("");
 
-  // Keep the on-screen order in step with the hand as cards are played or dealt.
-  const shownOrder = useMemo(() => keepOrder(order, hand), [order, hand]);
+  const baseOrder = useMemo(() => {
+    if (handSeat === null) return [];
+    return orders[handSeat] ?? sortHand(hand, sortMode === "manual" ? "rank" : sortMode);
+  }, [hand, handSeat, orders, sortMode]);
+  const shownOrder = useMemo(
+    () => (handSeat === null ? [] : keepOrder(baseOrder, hand)),
+    [baseOrder, hand, handSeat],
+  );
 
   // Bots take their turns after a short delay.
+  const botTurn = game.winner === null && isBotSeat(config, game.current);
   useEffect(() => {
-    if (game.winner !== null || game.current === 0) return;
+    if (!botTurn) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
       setThinking(true);
       let move: Card[];
       try {
-        move = await botMove(match.config.difficulty, game, game.current, getClient());
+        move = await botMove(config.difficulty, game, game.current, getClient());
       } catch {
         setNotice(`${MODEL_FAILED} The bots are playing as Medium.`);
         move = smartMove(game, game.current);
@@ -164,51 +329,70 @@ function Game({ initial, getClient, onNewMatch }: {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      // A cancelled turn must not leave the seat saying THINKING.
+      setThinking(false);
     };
-  }, [game, match.config.difficulty, getClient, speed]);
+  }, [botTurn, config, game, getClient, speed]);
 
-  const advice: AdviceStatus = adviceFor?.game === game ? adviceFor.status : { kind: "idle" };
+  const advice: AdviceStatus =
+    adviceFor?.game === game && adviceFor.seat === handSeat ? adviceFor.status : { kind: "idle" };
 
   // A new position starts the combo cycle again.
   useEffect(() => {
     comboIndex.current = -1;
-  }, [game]);
+  }, [game, handSeat]);
 
-  // Record each finished game once.
-  const recorded = useRef<GameState | null>(null);
+  // Record each finished game and each finished match exactly once. One-device
+  // games are shared, so they do not count towards any player's stats.
+  const recordedGame = useRef<GameState | null>(null);
   useEffect(() => {
-    if (game.winner === null || recorded.current === game) return;
-    recorded.current = game;
-    const matchWon = match.over && match.config.games > 1 ? matchWinners(match).includes(0) : null;
-    recordResult(game.winner === 0, matchWon);
-  }, [game, match]);
+    if (friends || game.winner === null || recordedGame.current === game) return;
+    recordedGame.current = game;
+    recordGame(game.winner === 0);
+  }, [friends, game]);
+
+  const recordedMatch = useRef<MatchState | null>(null);
+  useEffect(() => {
+    if (friends || !match.over || match.config.games === 1 || recordedMatch.current === match) return;
+    recordedMatch.current = match;
+    recordMatch(matchWinners(match).includes(0));
+  }, [friends, match]);
+
+  const finishTurn = useCallback(() => {
+    setSelected([]);
+    setGroups([]);
+    setLastTapped(null);
+    setUndoOrder(null);
+    setAdviceFor(null);
+    comboIndex.current = -1;
+    if (friends) setViewer(null);
+  }, [friends]);
 
   const play = useCallback(() => {
     if (!canPlay) return;
     setMatch((m) => playMove(m, selected));
-    setSelected([]);
-    setGroups((gs) => gs.map((g) => g.filter((c) => !selected.includes(c))).filter((g) => g.length > 1));
-  }, [canPlay, selected]);
+    finishTurn();
+  }, [canPlay, finishTurn, selected]);
 
   const pass = useCallback(() => {
     if (!canPass) return;
     setMatch((m) => playMove(m, []));
-    setSelected([]);
-  }, [canPass]);
+    finishTurn();
+  }, [canPass, finishTurn]);
 
   const hint = useCallback(async () => {
     setTab("advice");
-    if (!myTurn) return;
+    if (!myTurn || handSeat === null) return;
     const client = getClient();
-    if (!client) return setAdviceFor({ game, status: { kind: "error", message: MODEL_FAILED } });
-    setAdviceFor({ game, status: { kind: "loading" } });
+    if (!client) return setAdviceFor({ game, seat: handSeat, status: { kind: "error", message: MODEL_FAILED } });
+    setAdviceFor({ game, seat: handSeat, status: { kind: "loading" } });
     try {
-      const { moves, scores } = await client.score(game, 0);
-      setAdviceFor({ game, status: { kind: "ready", advice: rankAdvice(moves, scores) } });
+      const { moves, scores } = await client.score(game, handSeat);
+      setAdviceFor({ game, seat: handSeat, status: { kind: "ready", advice: rankAdvice(moves, scores) } });
     } catch {
-      setAdviceFor({ game, status: { kind: "error", message: MODEL_FAILED } });
+      setAdviceFor({ game, seat: handSeat, status: { kind: "error", message: MODEL_FAILED } });
     }
-  }, [getClient, game, myTurn]);
+  }, [getClient, game, handSeat, myTurn]);
 
   const cycleCombos = useCallback(() => {
     const combos = combosContaining(comboAnchor(selected, lastTapped), legal);
@@ -217,12 +401,18 @@ function Game({ initial, getClient, onNewMatch }: {
     setSelected(combos[comboIndex.current]);
   }, [lastTapped, legal, selected]);
 
+  const setSeatOrder = useCallback((next: Card[]) => {
+    if (handSeat === null) return;
+    setOrders((all) => ({ ...all, [handSeat]: next }));
+  }, [handSeat]);
+
   const applySort = useCallback((mode: Exclude<SortMode, "manual">) => {
+    if (handSeat === null) return;
     setUndoOrder(shownOrder);
-    setOrder(sortHand(hand, mode));
+    setSeatOrder(sortHand(hand, mode));
     setSortMode(mode);
     saveSortPreference(mode);
-  }, [hand, shownOrder]);
+  }, [hand, handSeat, setSeatOrder, shownOrder]);
 
   const cycleSort = useCallback(() => {
     const modes: Exclude<SortMode, "manual">[] = ["rank", "suit", "combo"];
@@ -230,30 +420,40 @@ function Game({ initial, getClient, onNewMatch }: {
   }, [applySort, sortMode]);
 
   const group = useCallback(() => {
-    if (selected.length < 2) return;
+    if (handSeat === null || selected.length < 2) return;
     setUndoOrder(shownOrder);
-    setOrder(groupCards(shownOrder, selected));
+    setSeatOrder(groupCards(shownOrder, selected));
     setGroups((gs) => [...gs.map((g) => g.filter((c) => !selected.includes(c))).filter((g) => g.length > 1), selected]);
     setSortMode("manual");
     setSelected([]);
-  }, [selected, shownOrder]);
+  }, [handSeat, selected, setSeatOrder, shownOrder]);
 
   // Keyboard: Enter plays, P passes, C cycles combos, H hints, S switches the sort.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const k = e.key.toLowerCase();
-      if (k === "enter") { e.preventDefault(); play(); }
-      else if (k === "p") pass();
+      if (k === "enter") {
+        // Let a focused button or link do its own action; only a hand card
+        // treats Enter as "play my selection".
+        if (isInteractive(e.target) && !isHandCard(e.target)) return;
+        if (handSeat === null) return;
+        e.preventDefault();
+        play();
+        return;
+      }
+      if (isTyping(e.target) || handSeat === null) return;
+      if (k === "p") pass();
       else if (k === "c") cycleCombos();
       else if (k === "h") void hint();
       else if (k === "s") cycleSort();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [play, pass, cycleCombos, hint, cycleSort]);
+  }, [cycleCombos, cycleSort, handSeat, hint, pass, play]);
 
   function toggle(card: Card) {
+    if (handSeat === null) return;
     setLastTapped(card);
     comboIndex.current = -1;
     setSelected((s) => (s.includes(card) ? s.filter((c) => c !== card) : [...s, card]));
@@ -261,25 +461,42 @@ function Game({ initial, getClient, onNewMatch }: {
 
   function newDeal(next: MatchState) {
     setMatch(next);
-    const mode = sortMode === "manual" ? "rank" : sortMode;
-    setOrder(sortHand(next.game.hands[0], mode));
+    setOrders({});
     setUndoOrder(null);
     setGroups([]);
     setSelected([]);
+    setLastTapped(null);
+    setAdviceFor(null);
+    setViewer(friends ? null : 0);
+  }
+
+  function ready() {
+    setViewer(game.current);
+    setSelected([]);
+    setGroups([]);
+    setUndoOrder(null);
+    setLastTapped(null);
+    setAdviceFor(null);
+    comboIndex.current = -1;
+    setSheet(null);
   }
 
   const panels = (which: "advice" | "history") =>
     which === "advice"
       ? <AdvicePanel status={advice} onPick={(cards) => setSelected(cards)} />
-      : <HistoryPanel game={game} />;
+      : <HistoryPanel game={game} names={names} hand={hand} />;
+
+  const handoff = friends && game.winner === null && humans.includes(game.current) && viewer !== game.current;
+  const scoreboard = match.wins.map((wins, seat) => `${shortName(names[seat])} ${wins}`).join("  ");
+  const difficultyLabel = friends && humans.length === 4 ? "NO BOTS" : match.config.difficulty.toUpperCase();
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
         <span>
-          {match.config.difficulty.toUpperCase()} ·{" "}
+          {difficultyLabel} ·{" "}
           {match.config.games === 1 ? "SINGLE GAME" : `GAME ${match.gameIndex + 1} OF ${match.config.games}`} · WINS{" "}
-          {match.wins.map((w, s) => `${SEAT_NAMES[s][0]} ${w}`).join("  ")}
+          {scoreboard}
         </span>
         <label className="flex items-center gap-2">
           BOT SPEED
@@ -298,30 +515,57 @@ function Game({ initial, getClient, onNewMatch }: {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-5 min-w-0">
-          <Table game={game} thinking={thinking} />
-
-          <Hand
-            order={shownOrder}
-            selected={selected}
-            playable={myTurn ? playable : new Set(hand)}
-            groups={groups}
-            onToggle={toggle}
-            onSlideSelect={setSelected}
-            onReorder={(o) => { setUndoOrder(shownOrder); setOrder(o); setSortMode("manual"); saveSortPreference("manual"); }}
+          <Table
+            game={game}
+            thinking={thinking}
+            names={names}
+            seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
+            youSeat={friends ? -1 : 0}
           />
+
+          {handSeat === null ? (
+            <div className="border-3 border-ink bg-card p-4 min-h-32 flex flex-col justify-center gap-2 shadow-brutal-sm">
+              <span className="text-sm font-extrabold">HAND HIDDEN</span>
+              <span className="font-mono text-xs">
+                {game.winner !== null ? "THE GAME IS OVER." : `${names[game.current].toUpperCase()} IS PLAYING.`}
+              </span>
+            </div>
+          ) : (
+            <Hand
+              order={shownOrder}
+              selected={selected}
+              playable={myTurn ? playable : new Set(hand)}
+              groups={groups}
+              onToggle={toggle}
+              onSlideSelect={setSelected}
+              onReorder={(o) => {
+                setUndoOrder(shownOrder);
+                setSeatOrder(o);
+                setSortMode("manual");
+                saveSortPreference("manual");
+              }}
+            />
+          )}
 
           <div className="flex flex-wrap gap-2 font-mono text-xs">
             <span className="self-center font-extrabold font-sans text-sm">SORT</span>
             {(["rank", "suit", "combo"] as const).map((m) => (
               <button key={m} type="button" onClick={() => applySort(m)} aria-pressed={sortMode === m}
+                disabled={handSeat === null}
                 className={`${button} px-3 py-2 min-h-11 ${sortMode === m ? "bg-accent" : "bg-card"}`}>
                 {m.toUpperCase()}
               </button>
             ))}
-            <button type="button" onClick={group} disabled={selected.length < 2}
+            <button type="button" onClick={group} disabled={handSeat === null || selected.length < 2}
               className={`${button} px-3 py-2 min-h-11 bg-card`}>GROUP</button>
-            <button type="button" onClick={() => { if (undoOrder) { setOrder(undoOrder); setUndoOrder(null); setSortMode("manual"); } }}
-              disabled={!undoOrder} className={`${button} px-3 py-2 min-h-11 bg-card`}>UNDO</button>
+            <button type="button" onClick={() => {
+              if (undoOrder && handSeat !== null) {
+                setSeatOrder(undoOrder);
+                setUndoOrder(null);
+                setSortMode("manual");
+              }
+            }}
+              disabled={!undoOrder || handSeat === null} className={`${button} px-3 py-2 min-h-11 bg-card`}>UNDO</button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -365,34 +609,65 @@ function Game({ initial, getClient, onNewMatch }: {
         </div>
       )}
 
+      {handoff && (
+        <div className="fixed inset-0 z-[45] flex items-center justify-center bg-paper p-4">
+          <section className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
+            <span className="font-mono text-xs font-extrabold">HAND-OFF</span>
+            <h2 className="text-4xl font-black leading-none">
+              {game.history.length === 0 ? `${names[game.current].toUpperCase()} STARTS` : `PASS TO ${names[game.current].toUpperCase()}`}
+            </h2>
+            <p className="font-mono text-sm">
+              TAP READY WHEN THE DEVICE IS WITH {names[game.current].toUpperCase()}. EVERY HAND IS HIDDEN.
+            </p>
+            <button type="button" onClick={ready} className={`${button} self-start px-6 py-3 bg-accent shadow-brutal-sm`}>
+              READY
+            </button>
+          </section>
+        </div>
+      )}
+
       {game.winner !== null && (
         <Result
           match={match}
+          names={names}
           onNext={() => newDeal(nextGame(match))}
           onEnd={() => setMatch(endMatch(match))}
           onNewMatch={onNewMatch}
+          onReview={() => setReviewing(true)}
+        />
+      )}
+      {reviewing && (
+        <ReviewPanel
+          final={game}
+          getClient={getClient}
+          onClose={() => setReviewing(false)}
+          names={names}
+          seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
+          youSeat={friends ? -1 : 0}
+          players={humans}
         />
       )}
     </div>
   );
 }
 
-function Result({ match, onNext, onEnd, onNewMatch }: {
-  match: MatchState; onNext: () => void; onEnd: () => void; onNewMatch: () => void;
+function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
+  match: MatchState; names: string[]; onNext: () => void; onEnd: () => void; onNewMatch: () => void; onReview: () => void;
 }) {
   const winner = match.game.winner!;
   const winners = matchWinners(match);
+  const friends = match.config.mode === "friends";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
       <section role="dialog" aria-label="Game over" className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
         <h2 className="text-4xl font-black leading-none">
-          {winner === 0 ? "YOU WIN" : `${SEAT_NAMES[winner].toUpperCase()} WINS`}
+          {winner === 0 && !friends ? "YOU WIN" : `${names[winner].toUpperCase()} WINS`}
         </h2>
         {match.config.games > 1 && (
           <div className="grid grid-cols-4 border-3 border-ink">
-            {match.wins.map((w, s) => (
-              <div key={s} className={`p-2 text-center ${s > 0 ? "border-l-3 border-ink" : ""} ${winners.includes(s) && match.over ? "bg-accent" : ""}`}>
-                <div className="font-mono text-xs">{SEAT_NAMES[s].toUpperCase()}</div>
+            {match.wins.map((w, seat) => (
+              <div key={seat} className={`p-2 text-center ${seat > 0 ? "border-l-3 border-ink" : ""} ${winners.includes(seat) && match.over ? "bg-accent" : ""}`}>
+                <div className="font-mono text-xs">{shortName(names[seat]).toUpperCase()}</div>
                 <div className="text-3xl font-black">{w}</div>
               </div>
             ))}
@@ -401,11 +676,12 @@ function Result({ match, onNext, onEnd, onNewMatch }: {
         {match.over && match.config.games > 1 && (
           <p className="font-mono text-sm">
             {winners.length > 1
-              ? `MATCH SHARED BY ${winners.map((s) => SEAT_NAMES[s].toUpperCase()).join(" AND ")}`
-              : winners[0] === 0 ? "YOU WIN THE MATCH" : `${SEAT_NAMES[winners[0]].toUpperCase()} WINS THE MATCH`}
+              ? `MATCH SHARED BY ${winners.map((s) => names[s].toUpperCase()).join(" AND ")}`
+              : winners[0] === 0 && !friends ? "YOU WIN THE MATCH" : `${names[winners[0]].toUpperCase()} WINS THE MATCH`}
           </p>
         )}
         <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={onReview} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>REVIEW</button>
           {!match.over && (
             <>
               <button type="button" onClick={onNext} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>NEXT GAME</button>

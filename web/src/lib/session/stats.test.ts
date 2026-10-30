@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readStats, recordResult } from "./stats";
+import { readStats, recordGame, recordMatch } from "./stats";
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -12,11 +12,13 @@ function memoryStorage() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("stats", () => {
-  it("counts games, wins, matches and match wins", () => {
+  it("counts games, wins, matches and match wins separately", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    recordResult(true, null);
-    recordResult(false, false);
-    recordResult(true, true);
+    recordGame(true);
+    recordGame(false);
+    recordMatch(false);
+    recordGame(true);
+    recordMatch(true);
     expect(readStats()).toEqual({ games: 3, wins: 2, matches: 2, matchWins: 1 });
   });
 
@@ -25,7 +27,8 @@ describe("stats", () => {
       getItem: () => { throw new Error("blocked"); },
       setItem: () => { throw new Error("blocked"); },
     });
-    expect(() => recordResult(true, null)).not.toThrow();
+    expect(() => recordGame(true)).not.toThrow();
+    expect(() => recordMatch(true)).not.toThrow();
     expect(readStats()).toEqual({ games: 0, wins: 0, matches: 0, matchWins: 0 });
   });
 });

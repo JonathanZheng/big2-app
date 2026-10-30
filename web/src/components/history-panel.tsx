@@ -1,14 +1,19 @@
 import { CardRow } from "@/components/card";
-import { RANK_NAMES, SUIT_SYMBOLS } from "@/lib/engine/cards";
+import { type Card, RANK_NAMES, SUIT_SYMBOLS } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { cardOwners, groupTricks, highCardsElsewhere } from "@/lib/session/history";
 import { SEAT_NAMES } from "@/lib/session/match";
 
 /** Trick-by-trick log, a grid of every card played and by whom, and the 2s and Aces still out. */
-export function HistoryPanel({ game }: { game: GameState }) {
+export function HistoryPanel({ game, names = SEAT_NAMES, hand = game.hands[0] }: {
+  game: GameState;
+  names?: string[];
+  hand?: Card[];
+}) {
   const tricks = groupTricks(game.history);
   const owners = cardOwners(game.history);
-  const { twos, aces } = highCardsElsewhere(game.history, game.hands[0]);
+  const { twos, aces } = highCardsElsewhere(game.history, hand);
+  const short = names[0] === "You" ? names.map((name) => name[0]) : names.map((_, seat) => String(seat + 1));
 
   return (
     <div className="flex flex-col">
@@ -28,26 +33,28 @@ export function HistoryPanel({ game }: { game: GameState }) {
         <div className="grid grid-cols-[auto_repeat(4,minmax(0,1fr))] gap-px bg-ink border-2 border-ink font-mono text-[11px]">
           <span className="bg-paper px-1" />
           {SUIT_SYMBOLS.map((s, i) => (
-            <span key={s} className={`bg-paper text-center ${i % 2 === 0 ? "text-suit-red" : ""}`}>{s}</span>
+            <span key={`suit-${s}`} className={`bg-paper text-center ${i % 2 === 0 ? "text-suit-red" : ""}`}>{s}</span>
           ))}
           {RANK_NAMES.map((r, ri) => [
-            <span key={r} className="bg-paper px-1 font-semibold">{r}</span>,
+            <span key={`rank-${r}`} className="bg-paper px-1 font-semibold">{r}</span>,
             ...SUIT_SYMBOLS.map((_, si) => {
               const card = ri * 4 + si;
               const owner = owners.get(card);
               return (
                 <span
-                  key={card}
-                  title={owner === undefined ? undefined : `${r}${SUIT_SYMBOLS[si]} played by ${SEAT_NAMES[owner]}`}
+                  key={`card-${card}`}
+                  title={owner === undefined ? undefined : `${r}${SUIT_SYMBOLS[si]} played by ${names[owner]}`}
                   className={`text-center ${owner === undefined ? "bg-card" : owner === 0 ? "bg-accent" : "bg-ink text-paper"}`}
                 >
-                  {owner === undefined ? "" : SEAT_NAMES[owner][0]}
+                  {owner === undefined ? "" : short[owner]}
                 </span>
               );
             }),
           ])}
         </div>
-        <p className="mt-2 font-mono text-[11px]">Y = YOU, W = WEST, N = NORTH, E = EAST.</p>
+        <p className="mt-2 font-mono text-[11px]">
+          {names.map((name, seat) => `${short[seat]} = ${name}`).join(", ").toUpperCase()}.
+        </p>
       </div>
 
       <ol className="flex flex-col-reverse">
@@ -56,7 +63,7 @@ export function HistoryPanel({ game }: { game: GameState }) {
             <span className="text-xs font-extrabold">TRICK {t + 1}</span>
             {trick.map((play, i) => (
               <div key={i} className="grid grid-cols-[64px_1fr] items-center gap-2">
-                <span className="font-mono text-xs">{SEAT_NAMES[play.player].toUpperCase()}</span>
+                <span className="font-mono text-xs">{names[play.player].toUpperCase()}</span>
                 {play.cards.length > 0 ? <CardRow cards={play.cards} size="sm" /> : <span className="font-mono text-xs">PASS</span>}
               </div>
             ))}

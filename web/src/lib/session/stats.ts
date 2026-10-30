@@ -19,18 +19,28 @@ export function readStats(): Stats {
   }
 }
 
-/** Record a finished game; `matchWon` is null unless this game ended a match of several games. */
-export function recordResult(won: boolean, matchWon: boolean | null) {
+function update(change: (stats: Stats) => void) {
   const stats = readStats();
-  stats.games += 1;
-  if (won) stats.wins += 1;
-  if (matchWon !== null) {
-    stats.matches += 1;
-    if (matchWon) stats.matchWins += 1;
-  }
+  change(stats);
   try {
     localStorage.setItem(KEY, JSON.stringify(stats));
   } catch {
     // Storage blocked: stats simply are not kept.
   }
+}
+
+/** Record a finished game, won or lost. */
+export function recordGame(won: boolean) {
+  update((stats) => {
+    stats.games += 1;
+    if (won) stats.wins += 1;
+  });
+}
+
+/** Record a multi-game match, including one finished early. */
+export function recordMatch(won: boolean) {
+  update((stats) => {
+    stats.matches += 1;
+    if (won) stats.matchWins += 1;
+  });
 }
