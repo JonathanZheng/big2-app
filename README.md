@@ -2,7 +2,7 @@
 
 A Big 2 bot trained by self-play, and a web app to play against it, play with friends, and get move suggestions for a real game. The bot is small enough to run in the browser.
 
-The web app in `web/` has a playable vs bots mode; vs friends and Best move are not built yet. See `web/README.md` for running and deploying it.
+The web app in `web/` has playable vs bots, one-device vs friends, Best move and game review modes. Accounts and online play are not built yet. See `web/README.md` for running and deploying it.
 
 ## The model
 

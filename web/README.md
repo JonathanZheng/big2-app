@@ -2,13 +2,14 @@
 
 Next.js 16, React 19 and Tailwind 4. The design is in `../docs/superpowers/specs/2026-10-30-web-app-design.md`.
 
-Current state: vs bots is playable. Vs friends and Best move are not built yet.
+Current state: vs bots, one-device vs friends, Best move, following a real game and game review are playable. Accounts and online play are not built yet.
 
 - `src/lib/engine`: the game rules, legal moves and game state, checked against positions exported from the Python engine
-- `src/lib/model`: the trained model's input encoding and network (weights in `public/model/`), run in a Web Worker, plus the evaluation and move labels
+- `src/lib/model`: the trained model's input encoding and network (weights in `public/model/`), run in a Web Worker with a main-thread fallback, plus the evaluation and move labels
 - `src/lib/bots`: Easy (greedy) and Medium (Smart) bots; Hard uses the model
-- `src/lib/hand`, `src/lib/session`: sorting, matches, history and browser stats
-- `src/components`: the game screen and its parts
+- `src/lib/hand`, `src/lib/session`: sorting, matches, history, browser stats and game review
+- `src/lib/best-move`: the manual board, following a real game and their saved state
+- `src/components`: the game screens, the board grid, review, best moves and their parts
 
 ## Run locally
 
