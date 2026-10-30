@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import fixtures from "./__fixtures__/positions.json";
-import { type Card, parseCards, rank } from "./cards";
+import { parseCards } from "./cards";
 import { type Fixture, type GameState, stateFromFixture } from "./game";
 import { canonicalOrder, legalMoves } from "./legal";
-import { MoveType, detectMoveType } from "./moves";
 
 const positions = fixtures as Fixture[];
 
@@ -24,22 +23,9 @@ const sorted = (text: string) => parseCards(text).sort((a, b) => a - b);
 
 describe("legalMoves", () => {
   it("matches the Python engine on every fixture position", () => {
-    // The Python generator misses opening full houses whose pair holds the 3♦
-    // (3♦ 3x + any triple). They are legal, so TypeScript offers them too.
-    const isMissedOpener = (m: Card[]) =>
-      detectMoveType(m) === MoveType.FullHouse && m.filter((c) => rank(c) === 0).length === 2;
-    let extras = 0;
     for (const f of positions) {
-      const ts = canonicalOrder(legalMoves(stateFromFixture(f), f.current));
-      const py = new Set(f.legal.map((m) => m.join(",")));
-      for (const m of ts) {
-        if (py.has(m.join(","))) continue;
-        expect(f.firstMove && isMissedOpener(m)).toBe(true);
-        extras++;
-      }
-      expect(ts.filter((m) => py.has(m.join(","))).length).toBe(f.legal.length);
+      expect(canonicalOrder(legalMoves(stateFromFixture(f), f.current))).toEqual(f.legal);
     }
-    expect(extras).toBeGreaterThan(0);
   });
 
   it("lets wrap-around straights open the game, and every opening move holds the 3♦", () => {
