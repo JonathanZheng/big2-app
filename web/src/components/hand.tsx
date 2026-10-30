@@ -3,10 +3,11 @@
 import {
   DndContext, type DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
-import { useRef } from "react";
+import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { useLayoutEffect, useRef, useState } from "react";
 import { CardFace } from "@/components/card";
 import { type Card, cardName } from "@/lib/engine/cards";
+import { groupBreaks, handOffsets } from "@/lib/hand/layout";
 
 const HOLD_MS = 250;
 const SLIDE_PX = 8;
@@ -37,7 +38,23 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   const slide = useRef<{ x: number; y: number; at: number; cards: Card[]; active: boolean } | null>(null);
   const suppressClick = useRef(false);
 
-  const groupStart = new Set(groups.filter((g) => g.length > 1).map((g) => order.find((c) => g.includes(c))));
+  // Measure the row and a card so every card can be placed evenly. The row is
+  // measured again whenever it changes size, such as when the window resizes.
+  const row = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: Infinity, card: 64 });
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const measure = () => {
+      const face = el.querySelector<HTMLElement>("[data-card] > span");
+      setSize({ width: el.clientWidth, card: face?.offsetWidth || 64 });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const offsets = handOffsets(order.length, size.width, size.card, groupBreaks(order, groups));
 
   function onPointerDown(e: React.PointerEvent) {
     // Keep receiving the release even when the pointer leaves the hand. The
@@ -98,8 +115,9 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={order} strategy={rectSortingStrategy}>
+      <SortableContext items={order} strategy={horizontalListSortingStrategy}>
         <div
+          ref={row}
           role="group"
           aria-label="Your hand"
           onPointerDown={onPointerDown}
@@ -107,16 +125,15 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onKeyDown={onKeyDown}
-          className="grid items-end pt-7 touch-none"
-          style={{ gridTemplateColumns: `repeat(${Math.max(order.length - 1, 0)}, minmax(0, 66px)) 66px` }}
+          className="flex items-end pt-7 touch-none min-w-0"
         >
-          {order.map((card) => (
+          {order.map((card, i) => (
             <HandCard
               key={card}
               card={card}
               selected={selected.includes(card)}
               dimmed={!playable.has(card)}
-              gapBefore={groupStart.has(card) && card !== order[0]}
+              offset={offsets[i]}
               disabled={disabled}
               onClick={() => {
                 if (suppressClick.current) return void (suppressClick.current = false);
@@ -139,8 +156,8 @@ function cardAt(x: number, y: number): Card | null {
   return el ? Number(el.dataset.card) : null;
 }
 
-function HandCard({ card, selected, dimmed, gapBefore, disabled, onClick }: {
-  card: Card; selected: boolean; dimmed: boolean; gapBefore: boolean; disabled?: boolean; onClick: () => void;
+function HandCard({ card, selected, dimmed, offset, disabled, onClick }: {
+  card: Card; selected: boolean; dimmed: boolean; offset: number; disabled?: boolean; onClick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card, disabled });
   return (
@@ -155,11 +172,14 @@ function HandCard({ card, selected, dimmed, gapBefore, disabled, onClick }: {
       {...listeners}
       aria-pressed={selected}
       style={{
+        marginLeft: offset,
         transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
         transition,
         zIndex: isDragging ? 50 : undefined,
       }}
-      className={`relative text-left transition-[margin] ${selected ? "-mt-6 mb-6" : ""} ${gapBefore ? "ml-3" : ""}`}
+      // A raised card moves with `translate`, which does not change the layout,
+      // so selecting never shifts the other cards.
+      className={`relative shrink-0 text-left transition-[translate] ${selected ? "-translate-y-6" : ""}`}
     >
       <CardFace
         card={card}
