@@ -11,6 +11,7 @@ The web app is not built yet. This repo currently holds the game engine, the tra
 - 716K parameters, weights only (2.9 MB)
 - Trained for 4,437,010 self-play games, about 6.75 hours on a MacBook CPU
 - Picks a move by scoring every legal move with one network call and playing the highest score
+- Full record of the training run, with the learning curve and speed: `docs/training/selfplay-v1.md`
 
 Win rate as 1 player against 3 copies of each opponent. 2,000 games each, random seats; 25% is break-even.
 
@@ -79,6 +80,7 @@ python3 train_selfplay.py --hours 8
 | `train_selfplay.py`, `benchmark.py`, `head_to_head.py` | Command line scripts |
 | `models/` | The current best model |
 | `tests/` | Rule tests |
+| `docs/training/` | Training run reports and their raw logs |
 | `docs/superpowers/` | Design document and project plan |
 
 ## How the model works

@@ -222,5 +222,8 @@ __marimo__/
 # Training runs (the chosen model is committed in models/)
 checkpoints/
 
+# Raw logs kept with training run reports
+!docs/training/**/*.log
+
 # macOS
 .DS_Store
