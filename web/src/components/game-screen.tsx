@@ -20,6 +20,7 @@ import {
   type GameMode, type MatchConfig, type MatchState, endMatch, humanSeats, isBotSeat, matchWinners, nextGame,
   playMove, seatNames, startMatch,
 } from "@/lib/session/match";
+import { gameRecord, saveGameRecord } from "@/lib/session/profile";
 import { recordGame, recordMatch } from "@/lib/session/stats";
 
 type ModelStatus = "loading" | "ready" | "failed";
@@ -32,22 +33,22 @@ const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:
 
 /** Keyboard shortcuts must not fire while a form control or editable text has focus. */
 function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+  if (!(target instanceof HTMLElement)) return false;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
 }
 
 /** Links and ordinary buttons keep Enter for their own action. A hand card is the exception. */
 function isInteractive(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el) return false;
-  return !!el.closest("button, a, [role='button']");
+  return target instanceof Element && !!target.closest("button, a, [role='button']");
 }
 
 function isHandCard(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return !!el?.closest("[data-card]");
+  return target instanceof Element && !!target.closest("[data-card]");
 }
+
+/** The side column (and so the Best moves panel) shows from this width up. */
+const isWide = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+const action = "h-14 sm:h-16 text-lg sm:text-2xl shadow-brutal";
 
 const shortName = (name: string) => {
   if (name.startsWith("Player ")) return `P${name.slice(7)}`;
@@ -109,6 +110,7 @@ export function GameScreen({ mode = "bots" }: { mode?: GameMode }) {
       names={seatNames(match.config)}
       getClient={getClient}
       onNewMatch={() => setMatch(null)}
+      onRestart={() => start(match.config)}
     />
   );
 }
@@ -260,10 +262,12 @@ function FriendsSetup({ modelStatus, modelError, onRetry, onStart }: {
   );
 }
 
-function Game({ initial, getClient, onNewMatch, names }: {
+function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   initial: MatchState;
   getClient: () => ModelClient | null;
   onNewMatch: () => void;
+  /** Start again with the same settings. */
+  onRestart: () => void;
   names: string[];
 }) {
   const config = initial.config;
@@ -286,6 +290,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
   const [thinking, setThinking] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
+  const [leaving, setLeaving] = useState<"restart" | "exit" | null>(null);
 
   const game = match.game;
   const handSeat = friends
@@ -309,7 +314,8 @@ function Game({ initial, getClient, onNewMatch, names }: {
   );
 
   // Bots take their turns after a short delay.
-  const botTurn = game.winner === null && isBotSeat(config, game.current);
+  // Bots wait while the restart or exit question is open.
+  const botTurn = game.winner === null && isBotSeat(config, game.current) && leaving === null;
   useEffect(() => {
     if (!botTurn) return;
     let cancelled = false;
@@ -345,11 +351,15 @@ function Game({ initial, getClient, onNewMatch, names }: {
   // Record each finished game and each finished match exactly once. One-device
   // games are shared, so they do not count towards any player's stats.
   const recordedGame = useRef<GameState | null>(null);
+  // Turns of the current game on which a hint was asked for.
+  const hintTurns = useRef(new Set<GameState>());
   useEffect(() => {
     if (friends || game.winner === null || recordedGame.current === game) return;
     recordedGame.current = game;
     recordGame(game.winner === 0);
-  }, [friends, game]);
+    saveGameRecord(gameRecord(game, 0, config.difficulty, hintTurns.current.size, Date.now()));
+    hintTurns.current = new Set();
+  }, [config.difficulty, friends, game]);
 
   const recordedMatch = useRef<MatchState | null>(null);
   useEffect(() => {
@@ -383,6 +393,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
   const hint = useCallback(async () => {
     setTab("advice");
     if (!myTurn || handSeat === null) return;
+    hintTurns.current.add(game);
     const client = getClient();
     if (!client) return setAdviceFor({ game, seat: handSeat, status: { kind: "error", message: MODEL_FAILED } });
     setAdviceFor({ game, seat: handSeat, status: { kind: "loading" } });
@@ -431,7 +442,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
   // Keyboard: Enter plays, P passes, C cycles combos, H hints, S switches the sort.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || leaving !== null) return;
       const k = e.key.toLowerCase();
       if (k === "enter") {
         // Let a focused button or link do its own action; only a hand card
@@ -450,7 +461,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleCombos, cycleSort, handSeat, hint, pass, play]);
+  }, [cycleCombos, cycleSort, handSeat, hint, leaving, pass, play]);
 
   function toggle(card: Card) {
     if (handSeat === null) return;
@@ -498,6 +509,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
           {match.config.games === 1 ? "SINGLE GAME" : `GAME ${match.gameIndex + 1} OF ${match.config.games}`} · WINS{" "}
           {scoreboard}
         </span>
+        <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">
           BOT SPEED
           <select
@@ -510,6 +522,11 @@ function Game({ initial, getClient, onNewMatch, names }: {
             <option value="fast">FAST</option>
           </select>
         </label>
+          <button type="button" onClick={() => setLeaving("restart")}
+            className={`${button} px-3 py-1.5 min-h-9 bg-card font-mono`}>RESTART</button>
+          <button type="button" onClick={() => setLeaving("exit")}
+            className={`${button} px-3 py-1.5 min-h-9 bg-card font-mono`}>EXIT</button>
+        </div>
       </div>
       {notice && <p className="border-3 border-ink bg-card p-3 font-mono text-sm">{notice}</p>}
 
@@ -570,15 +587,13 @@ function Game({ initial, getClient, onNewMatch, names }: {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <button type="button" onClick={play} disabled={!canPlay}
-              className={`${button} h-16 text-2xl bg-accent shadow-brutal`}>PLAY</button>
+              className={`${button} ${action} bg-accent`}>PLAY</button>
             <button type="button" onClick={pass} disabled={!canPass}
-              className={`${button} h-16 text-2xl bg-card shadow-brutal`}>PASS</button>
+              className={`${button} ${action} bg-card`}>PASS</button>
             <button type="button" onClick={cycleCombos} disabled={!myTurn}
-              className={`${button} h-12 sm:h-16 bg-card shadow-brutal-sm`}>COMBOS</button>
-            <button type="button" onClick={() => { void hint(); setSheet("advice"); }} disabled={!myTurn}
-              className={`${button} h-12 sm:h-16 bg-card shadow-brutal-sm lg:hidden`}>HINT</button>
-            <button type="button" onClick={() => void hint()} disabled={!myTurn}
-              className={`${button} h-16 bg-card shadow-brutal-sm hidden lg:block`}>HINT</button>
+              className={`${button} ${action} bg-card`}>COMBOS</button>
+            <button type="button" onClick={() => { void hint(); if (!isWide()) setSheet("advice"); }} disabled={!myTurn}
+              className={`${button} ${action} bg-card`}>HINT</button>
             <button type="button" onClick={() => setSheet("history")}
               className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden col-span-2 sm:col-span-4`}>HISTORY</button>
           </div>
@@ -619,11 +634,29 @@ function Game({ initial, getClient, onNewMatch, names }: {
             <p className="font-mono text-sm">
               TAP READY WHEN THE DEVICE IS WITH {names[game.current].toUpperCase()}. EVERY HAND IS HIDDEN.
             </p>
-            <button type="button" onClick={ready} className={`${button} self-start px-6 py-3 bg-accent shadow-brutal-sm`}>
-              READY
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={ready} className={`${button} px-6 py-3 bg-accent shadow-brutal-sm`}>
+                READY
+              </button>
+              <button type="button" onClick={() => setLeaving("restart")}
+                className={`${button} px-3 py-2 bg-card font-mono text-xs`}>RESTART</button>
+              <button type="button" onClick={() => setLeaving("exit")}
+                className={`${button} px-3 py-2 bg-card font-mono text-xs`}>EXIT</button>
+            </div>
           </section>
         </div>
+      )}
+
+      {leaving && (
+        <Confirm
+          title={leaving === "restart" ? "RESTART?" : "EXIT THIS GAME?"}
+          detail={leaving === "restart"
+            ? "DEALS A NEW GAME WITH THE SAME SETTINGS. THE CURRENT GAME AND MATCH SCORE ARE DROPPED AND NOT COUNTED IN YOUR STATS."
+            : "GOES BACK TO THE SETUP SCREEN. THE CURRENT GAME AND MATCH SCORE ARE DROPPED AND NOT COUNTED IN YOUR STATS."}
+          confirm={leaving === "restart" ? "RESTART" : "EXIT"}
+          onConfirm={leaving === "restart" ? onRestart : onNewMatch}
+          onCancel={() => setLeaving(null)}
+        />
       )}
 
       {game.winner !== null && (
@@ -647,6 +680,29 @@ function Game({ initial, getClient, onNewMatch, names }: {
           players={humans}
         />
       )}
+    </div>
+  );
+}
+
+function Confirm({ title, detail, confirm, onConfirm, onCancel }: {
+  title: string; detail: string; confirm: string; onConfirm: () => void; onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4" onClick={onCancel}>
+      <section role="alertdialog" aria-label={title} onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
+        <h2 className="text-4xl font-black leading-none">{title}</h2>
+        <p className="font-mono text-sm leading-relaxed">{detail}</p>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" autoFocus onClick={onCancel} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>KEEP PLAYING</button>
+          <button type="button" onClick={onConfirm} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>{confirm}</button>
+        </div>
+      </section>
     </div>
   );
 }

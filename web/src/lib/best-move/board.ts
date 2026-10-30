@@ -161,6 +161,8 @@ export function checkBoard(board: Board): BoardCheck {
   const played = playedBy(board);
   const opening = isOpening(board);
 
+  // Everything else depends on the hand, so ask for it before anything else.
+  if (mine.length === 0) return { errors: ["Mark the cards in your hand first."], warnings };
   if (mine.length > 13) errors.push("Your hand has more than 13 cards.");
   if (board.lastPlayer === null) {
     if (board.lastCards.length > 0) errors.push("Clear the cards on the table if you are leading.");
@@ -198,7 +200,7 @@ export function checkBoard(board: Board): BoardCheck {
   const typedTotal = counts.reduce((a, b) => a + b, 0);
   if (typedTotal !== unseen) {
     warnings.push(
-      `The three counts add up to ${typedTotal}, but ${unseen} cards are not marked as played. Advice may be less accurate.`,
+      `Your counts give the other players ${typedTotal} cards, but ${unseen} cards are not in your hand or marked as played. Advice may be less accurate.`,
     );
   }
 
