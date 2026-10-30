@@ -109,6 +109,7 @@ export function GameScreen({ mode = "bots" }: { mode?: GameMode }) {
       names={seatNames(match.config)}
       getClient={getClient}
       onNewMatch={() => setMatch(null)}
+      onRestart={() => start(match.config)}
     />
   );
 }
@@ -260,10 +261,12 @@ function FriendsSetup({ modelStatus, modelError, onRetry, onStart }: {
   );
 }
 
-function Game({ initial, getClient, onNewMatch, names }: {
+function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   initial: MatchState;
   getClient: () => ModelClient | null;
   onNewMatch: () => void;
+  /** Start again with the same settings. */
+  onRestart: () => void;
   names: string[];
 }) {
   const config = initial.config;
@@ -286,6 +289,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
   const [thinking, setThinking] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
+  const [leaving, setLeaving] = useState<"restart" | "exit" | null>(null);
 
   const game = match.game;
   const handSeat = friends
@@ -309,7 +313,8 @@ function Game({ initial, getClient, onNewMatch, names }: {
   );
 
   // Bots take their turns after a short delay.
-  const botTurn = game.winner === null && isBotSeat(config, game.current);
+  // Bots wait while the restart or exit question is open.
+  const botTurn = game.winner === null && isBotSeat(config, game.current) && leaving === null;
   useEffect(() => {
     if (!botTurn) return;
     let cancelled = false;
@@ -431,7 +436,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
   // Keyboard: Enter plays, P passes, C cycles combos, H hints, S switches the sort.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || leaving !== null) return;
       const k = e.key.toLowerCase();
       if (k === "enter") {
         // Let a focused button or link do its own action; only a hand card
@@ -450,7 +455,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cycleCombos, cycleSort, handSeat, hint, pass, play]);
+  }, [cycleCombos, cycleSort, handSeat, hint, leaving, pass, play]);
 
   function toggle(card: Card) {
     if (handSeat === null) return;
@@ -498,6 +503,7 @@ function Game({ initial, getClient, onNewMatch, names }: {
           {match.config.games === 1 ? "SINGLE GAME" : `GAME ${match.gameIndex + 1} OF ${match.config.games}`} · WINS{" "}
           {scoreboard}
         </span>
+        <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">
           BOT SPEED
           <select
@@ -510,6 +516,11 @@ function Game({ initial, getClient, onNewMatch, names }: {
             <option value="fast">FAST</option>
           </select>
         </label>
+          <button type="button" onClick={() => setLeaving("restart")}
+            className={`${button} px-3 py-1.5 min-h-9 bg-card font-mono`}>RESTART</button>
+          <button type="button" onClick={() => setLeaving("exit")}
+            className={`${button} px-3 py-1.5 min-h-9 bg-card font-mono`}>EXIT</button>
+        </div>
       </div>
       {notice && <p className="border-3 border-ink bg-card p-3 font-mono text-sm">{notice}</p>}
 
@@ -624,6 +635,18 @@ function Game({ initial, getClient, onNewMatch, names }: {
         </div>
       )}
 
+      {leaving && (
+        <Confirm
+          title={leaving === "restart" ? "RESTART?" : "EXIT THIS GAME?"}
+          detail={leaving === "restart"
+            ? "DEALS A NEW GAME WITH THE SAME SETTINGS. THE CURRENT GAME AND MATCH SCORE ARE DROPPED AND NOT COUNTED IN YOUR STATS."
+            : "GOES BACK TO THE SETUP SCREEN. THE CURRENT GAME AND MATCH SCORE ARE DROPPED AND NOT COUNTED IN YOUR STATS."}
+          confirm={leaving === "restart" ? "RESTART" : "EXIT"}
+          onConfirm={leaving === "restart" ? onRestart : onNewMatch}
+          onCancel={() => setLeaving(null)}
+        />
+      )}
+
       {game.winner !== null && (
         <Result
           match={match}
@@ -645,6 +668,29 @@ function Game({ initial, getClient, onNewMatch, names }: {
           players={humans}
         />
       )}
+    </div>
+  );
+}
+
+function Confirm({ title, detail, confirm, onConfirm, onCancel }: {
+  title: string; detail: string; confirm: string; onConfirm: () => void; onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/50 p-4" onClick={onCancel}>
+      <section role="alertdialog" aria-label={title} onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
+        <h2 className="text-4xl font-black leading-none">{title}</h2>
+        <p className="font-mono text-sm leading-relaxed">{detail}</p>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" autoFocus onClick={onCancel} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>KEEP PLAYING</button>
+          <button type="button" onClick={onConfirm} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>{confirm}</button>
+        </div>
+      </section>
     </div>
   );
 }
