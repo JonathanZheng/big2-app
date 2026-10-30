@@ -12,13 +12,23 @@ function lastAction(game: GameState, seat: number): string {
   return "WAITING";
 }
 
-/** The three opponents across the top and the trick in the middle. */
-export function Table({ game, thinking }: { game: GameState; thinking: boolean }) {
+/**
+ * The seats and the trick in the middle. Vs bots shows the three opponents;
+ * one-device games show all four seats.
+ */
+export function Table({ game, thinking, names = SEAT_NAMES, seats = [1, 2, 3], youSeat = 0 }: {
+  game: GameState;
+  thinking: boolean;
+  names?: string[];
+  seats?: number[];
+  /** The seat the hand below belongs to, or -1 when no hand is shown. */
+  youSeat?: number;
+}) {
   const lastPlayer = game.history.at(-1)?.player;
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {[1, 2, 3].map((seat) => {
+      <div className={`grid gap-2 sm:gap-4 ${seats.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
+        {seats.map((seat) => {
           const turn = game.winner === null && game.current === seat;
           return (
             <div
@@ -28,7 +38,7 @@ export function Table({ game, thinking }: { game: GameState; thinking: boolean }
               }`}
             >
               <div className="flex justify-between items-baseline gap-1">
-                <span className="text-xs sm:text-sm font-extrabold tracking-wide">{SEAT_NAMES[seat].toUpperCase()}</span>
+                <span className="text-xs sm:text-sm font-extrabold tracking-wide">{names[seat].toUpperCase()}</span>
                 <span className="font-mono text-[10px] sm:text-xs">
                   {turn && thinking ? "THINKING" : lastAction(game, seat)}
                 </span>
@@ -49,10 +59,10 @@ export function Table({ game, thinking }: { game: GameState; thinking: boolean }
         <div className="flex flex-wrap justify-between gap-2 font-mono text-xs">
           <span>
             {game.lastPlay
-              ? `TO BEAT: ${SEAT_NAMES[game.lastPlay.player].toUpperCase()}`
+              ? `TO BEAT: ${names[game.lastPlay.player].toUpperCase()}`
               : game.firstMove
                 ? "OPENING: MUST INCLUDE 3♦"
-                : `${SEAT_NAMES[game.current].toUpperCase()} LEADS`}
+                : `${names[game.current].toUpperCase()} LEADS`}
           </span>
           {game.lastPlay && <span>{game.passes} {game.passes === 1 ? "PASS" : "PASSES"}</span>}
         </div>
@@ -61,10 +71,10 @@ export function Table({ game, thinking }: { game: GameState; thinking: boolean }
         </div>
         <div className="font-mono text-xs">
           {game.winner !== null
-            ? `${SEAT_NAMES[game.winner].toUpperCase()} ${game.winner === 0 ? "WIN" : "WINS"}`
-            : game.current === 0
+            ? `${names[game.winner].toUpperCase()} ${game.winner === youSeat ? "WIN" : "WINS"}`
+            : game.current === youSeat
               ? "YOUR TURN"
-              : `${SEAT_NAMES[game.current].toUpperCase()} TO PLAY`}
+              : `${names[game.current].toUpperCase()} TO PLAY`}
         </div>
       </section>
     </div>
