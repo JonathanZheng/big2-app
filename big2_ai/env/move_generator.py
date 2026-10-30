@@ -425,12 +425,10 @@ def _first_move_full_houses(rank_map: Dict[int, List[int]], player: int) -> List
         cards_of_3 = rank_map[0]
         # Generate pairs containing 3♦
         for i in range(len(cards_of_3)):
-            if cards_of_3[i] == 0 or (i > 0 and 0 in cards_of_3[:i]):
-                continue  # Skip if 3♦ not in pair
             for j in range(i + 1, len(cards_of_3)):
-                if 0 not in [cards_of_3[i], cards_of_3[j]]:
-                    continue
                 pair = [cards_of_3[i], cards_of_3[j]]
+                if 0 not in pair:
+                    continue  # Skip if 3♦ not in pair
                 # Add triples from other ranks
                 for triple_rank, triple_cards in rank_map.items():
                     if triple_rank != 0 and len(triple_cards) >= 3:

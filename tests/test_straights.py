@@ -117,6 +117,13 @@ def test_random_games_only_generate_valid_moves():
     assert wraparounds > 0
 
 
+def test_opening_full_house_can_hold_the_three_of_diamonds_in_its_pair():
+    # 3♦ 3♣ is the pair; the triple is 4s.
+    game = _game_with_hand(cards('3d 3c 4d 4c 4s 9h 10s'))
+    assert sorted(cards('3d 3c 4d 4c 4s')) in _legal(game)
+    assert all(0 in m for m in _legal(game))
+
+
 def test_four_of_a_kind_ranks_between_full_house_and_straight_flush():
     quad = cards('6d 6c 6h 6s 3h')
     assert detect_move_type(quad) == MoveType.QUAD_WITH_KICKER

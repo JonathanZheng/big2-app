@@ -2,7 +2,7 @@
 
 A Big 2 bot trained by self-play, and a web app to play against it, play with friends, and get move suggestions for a real game. The bot is small enough to run in the browser.
 
-The web app in `web/` is set up but its modes are not built yet. See `web/README.md` for running and deploying it.
+The web app in `web/` has playable vs bots, one-device vs friends, Best move and game review modes. Accounts and online play are not built yet. See `web/README.md` for running and deploying it.
 
 ## The model
 
@@ -78,6 +78,7 @@ python3 train_selfplay.py --hours 8
 | `big2_ai/models/selfplay_network.py` | The network |
 | `big2_ai/training/selfplay.py` | Deep Monte Carlo trainer: actor processes play games, a learner trains on every decision labelled with that player's final result |
 | `train_selfplay.py`, `benchmark.py`, `head_to_head.py` | Command line scripts |
+| `scripts/` | Exports for the web app: model weights, test positions, and the label cut-off check |
 | `models/` | The current best model |
 | `tests/` | Rule tests |
 | `docs/training/` | Training run reports and their raw logs |
