@@ -15,6 +15,7 @@ import type { Play } from "@/lib/engine/game";
 import { rankAdvice } from "@/lib/model/advice";
 import type { ModelClient } from "@/lib/model/client";
 import { SEAT_NAMES } from "@/lib/session/match";
+import { saveReview } from "@/lib/session/saved-reviews";
 
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 const MODEL_FAILED = "Model failed to load. You can still record the game, but advice needs the model.";
@@ -253,11 +254,11 @@ export function FollowGame({ getClient }: { getClient: () => ModelClient | null 
                   RECORD {selected.length > 0 ? `${selected.length} CARD${selected.length === 1 ? "" : "S"}` : "MOVE"}
                 </button>
                 <button type="button" onClick={pass} disabled={state.lastPlay === null || state.current === null}
-                  className={`${button} px-4 py-3 bg-paper`}>
+                  className={`${button} px-4 py-3 bg-paper shadow-brutal-sm`}>
                   RECORD PASS
                 </button>
                 <button type="button" onClick={undo} disabled={history.length === 0}
-                  className={`${button} px-4 py-3 bg-paper`}>
+                  className={`${button} px-4 py-3 bg-paper shadow-brutal-sm`}>
                   UNDO
                 </button>
               </div>
@@ -306,7 +307,28 @@ export function FollowGame({ getClient }: { getClient: () => ModelClient | null 
         </aside>
       </div>
 
-      {reviewing && <ReviewPanel final={followFinalState(state)} getClient={getClient} onClose={() => setReviewing(false)} />}
+      {reviewing && (
+        <ReviewPanel
+          final={followFinalState(state)}
+          getClient={getClient}
+          onClose={() => setReviewing(false)}
+          onSave={() => {
+            const final = followFinalState(state);
+            return saveReview({
+              id: `follow-${state.initial.join("-")}-${final.history.length}`,
+              at: Date.now(),
+              title: `REAL GAME · ${final.winner === 0 ? "WON" : "LOST"}`,
+              final,
+              names: [...SEAT_NAMES],
+              seats: [1, 2, 3],
+              youSeat: 0,
+              players: [0],
+              // Other hands are not known in a real game, so only my moves are scored.
+              scoreAll: false,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

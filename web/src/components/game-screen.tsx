@@ -21,6 +21,7 @@ import {
   playMove, seatNames, startMatch,
 } from "@/lib/session/match";
 import { gameRecord, saveGameRecord } from "@/lib/session/profile";
+import { saveReview } from "@/lib/session/saved-reviews";
 import { recordGame, recordMatch } from "@/lib/session/stats";
 
 type ModelStatus = "loading" | "ready" | "failed";
@@ -678,6 +679,20 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
           seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
           youSeat={friends ? -1 : 0}
           players={humans}
+          scoreAll
+          onSave={() => saveReview({
+            id: `game-${match.seed}-${match.gameIndex}`,
+            at: Date.now(),
+            title: friends
+              ? `VS FRIENDS · ${humans.length} PEOPLE · ${names[game.winner ?? 0].toUpperCase()} WON`
+              : `VS BOTS · ${config.difficulty.toUpperCase()} · ${game.winner === 0 ? "WON" : "LOST"}`,
+            final: game,
+            names,
+            seats: friends ? [0, 1, 2, 3] : [1, 2, 3],
+            youSeat: friends ? -1 : 0,
+            players: humans,
+            scoreAll: true,
+          })}
         />
       )}
     </div>
