@@ -28,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col font-sans">
         <SiteHeader />
-        <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-10 py-8">
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-10 py-8">
           {children}
         </main>
       </body>

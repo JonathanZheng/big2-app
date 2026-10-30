@@ -111,7 +111,8 @@ The model scores every legal move with its prediction of the final result (winne
 - Options whose scores are very close get the same label (Best or Good) rather than one being called clearly better.
 - What a score means: the model's expected result if the other three players are as strong as the model. It is the model's learned estimate from everything the player can see, not an exact calculation over the hidden hands.
 - Against weaker players the model is too pessimistic. Measured on 600 games against 3 Smart bots: decisions scored -0.4 to -0.2 won 54% (30% in self-play), and decisions scored -0.8 to -0.6 won 23% (9% in self-play).
-- The calibration above comes from self-play: complete information and the model in every seat. Against people it is unknown. This is why the app shows a chess-style evaluation and move labels rather than percentages.
+- The calibration above comes from self-play: complete information and the model in every seat. Against people it is unknown.
+- Label cut-offs (drop in internal win chance against the best move): Good under 0.02, Inaccuracy under 0.05, Mistake under 0.12, Blunder from 0.12. Checked with `scripts/advice_cutoffs.py` on 300 games of the model against 3 Smart bots: the Smart bots' 5,589 moves with a choice were labelled Best 46.6%, Good 27.7%, Inaccuracy 10.9%, Mistake 7.9%, Blunder 6.8%. This is why the app shows a chess-style evaluation and move labels rather than percentages.
 
 ## Layout
 
