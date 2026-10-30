@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  DndContext, type DragEndEvent, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
+  DndContext, type DragEndEvent, PointerSensor, closestCenter, useSensor, useSensors,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { useRef } from "react";
@@ -33,7 +33,6 @@ interface HandProps {
 export function Hand({ order, selected, playable, groups, disabled, onToggle, onSlideSelect, onReorder }: HandProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: HOLD_MS, tolerance: SLIDE_PX } }),
-    useSensor(KeyboardSensor),
   );
   const slide = useRef<{ x: number; y: number; at: number; cards: Card[]; active: boolean } | null>(null);
   const suppressClick = useRef(false);
@@ -41,13 +40,27 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   const groupStart = new Set(groups.filter((g) => g.length > 1).map((g) => order.find((c) => g.includes(c))));
 
   function onPointerDown(e: React.PointerEvent) {
-    const card = cardAt(e.clientX, e.clientY);
+    // Keep receiving the release even when the pointer leaves the hand. The
+    // capture goes on the card so dnd-kit's listeners still see the events.
+    const el = cardElementAt(e.clientX, e.clientY);
+    if (el) {
+      try { el.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    }
+    // A slide that ended outside the hand may not produce a click, so clear
+    // the flag at the start of every gesture rather than relying on one.
+    suppressClick.current = false;
+    const card = el ? Number(el.dataset.card) : null;
     slide.current = card === null ? null : { x: e.clientX, y: e.clientY, at: Date.now(), cards: [card], active: false };
   }
 
   function onPointerMove(e: React.PointerEvent) {
     const s = slide.current;
     if (!s) return;
+    // The button was released somewhere outside a pointerup handler.
+    if (e.buttons === 0) {
+      slide.current = null;
+      return;
+    }
     if (!s.active) {
       const moved = Math.hypot(e.clientX - s.x, e.clientY - s.y) > SLIDE_PX;
       if (!moved) return;
@@ -117,8 +130,12 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   );
 }
 
+function cardElementAt(x: number, y: number): HTMLElement | null {
+  return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-card]") ?? null;
+}
+
 function cardAt(x: number, y: number): Card | null {
-  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-card]");
+  const el = cardElementAt(x, y);
   return el ? Number(el.dataset.card) : null;
 }
 
