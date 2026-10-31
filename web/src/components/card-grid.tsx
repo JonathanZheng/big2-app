@@ -56,7 +56,7 @@ export function CardGrid({ board, onCard, highlight = [], tableCards = [], selec
               disabled={disabled}
               onClick={() => onCard(card)}
               className={`relative min-h-11 px-1 py-0.5 text-left font-mono leading-none border-0 ${
-                picked ? "bg-picked" : owner === "mine" ? "bg-accent" : owner === "unseen" ? "bg-card" : owner === "out" ? "bg-paper" : "bg-ink"
+                picked ? "bg-picked" : owner === "mine" ? "bg-accent" : owner === "unseen" ? "bg-card" : owner === "out" ? "bg-paper hatch" : "bg-ink"
               } ${dark && !picked ? "text-paper" : "text-ink"} ${
                 // Fade only the text: fading the cell would let the black grid lines show through it.
                 // Your own cards stay fully readable; they just cannot be picked for another player.
