@@ -100,5 +100,17 @@ create policy "Members read the game in their rooms" on public.room_games
 create policy "Players read only their own hand" on public.room_hands
   for select to authenticated using (user_id = (select auth.uid()));
 
+-- New tables get no access by default. The server (secret key) can do
+-- everything; signed-in players can only read, and the policies above decide
+-- which rows. Signed-out visitors get nothing.
+grant select, insert, update, delete on
+  public.profiles, public.player_stats, public.rooms, public.room_seats, public.room_games, public.room_hands
+  to service_role;
+grant select on
+  public.profiles, public.player_stats, public.rooms, public.room_seats, public.room_games, public.room_hands
+  to authenticated;
+grant execute on function public.is_room_member(uuid) to authenticated;
+revoke execute on function public.is_room_member(uuid) from anon, public;
+
 -- Live updates for room screens.
 alter publication supabase_realtime add table public.rooms, public.room_seats, public.room_games, public.room_hands;
