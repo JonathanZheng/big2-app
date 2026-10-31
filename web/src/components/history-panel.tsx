@@ -1,7 +1,7 @@
 import { CardRow } from "@/components/card";
 import { type Card, RANK_NAMES, SUIT_SYMBOLS } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
-import { cardOwners, groupTricks, highCardsElsewhere } from "@/lib/session/history";
+import { cardOwners, groupTricks, highCardsElsewhere, seatLabels } from "@/lib/session/history";
 import { SEAT_NAMES } from "@/lib/session/match";
 
 /** Trick-by-trick log, a grid of every card played and by whom, and the 2s and Aces still out. */
@@ -13,7 +13,7 @@ export function HistoryPanel({ game, names = SEAT_NAMES, hand = game.hands[0] }:
   const tricks = groupTricks(game.history);
   const owners = cardOwners(game.history);
   const { twos, aces } = highCardsElsewhere(game.history, hand);
-  const short = names[0] === "You" ? names.map((name) => name[0]) : names.map((_, seat) => String(seat + 1));
+  const short = seatLabels(names);
 
   return (
     <div className="flex flex-col">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCards } from "@/lib/engine/cards";
 import type { Play } from "@/lib/engine/game";
-import { cardOwners, groupTricks, highCardsElsewhere } from "./history";
+import { cardOwners, groupTricks, highCardsElsewhere, seatLabels } from "./history";
 
 const play = (player: number, cards: string): Play => ({ player, cards: cards ? parseCards(cards) : [] });
 
@@ -29,5 +29,20 @@ describe("highCardsElsewhere", () => {
   it("counts the 2s and Aces neither played nor in my hand", () => {
     const history = [play(1, "2d"), play(2, "As")];
     expect(highCardsElsewhere(history, parseCards("2s Ac 3d"))).toEqual({ twos: 2, aces: 2 });
+  });
+});
+
+describe("seatLabels", () => {
+  it("uses each name's first letter", () => {
+    expect(seatLabels(["You", "West", "North", "East"])).toEqual(["Y", "W", "N", "E"]);
+  });
+
+  it("keeps the number so bots and players stay apart", () => {
+    expect(seatLabels(["You", "Friend", "Bot 1", "Bot 2"])).toEqual(["Y", "F", "B1", "B2"]);
+    expect(seatLabels(["Player 1", "Player 2", "Bot 3", "Bot 4"])).toEqual(["P1", "P2", "B3", "B4"]);
+  });
+
+  it("falls back to seat numbers when two labels would match", () => {
+    expect(seatLabels(["Sam", "Sara", "You", "Bot 4"])).toEqual(["1", "2", "3", "4"]);
   });
 });
