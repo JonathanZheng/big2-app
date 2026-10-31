@@ -7,6 +7,9 @@ import { callOnline, onlineClient } from "@/lib/online/client";
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 const input = "border-3 border-ink bg-card px-3 py-2 font-mono text-base min-h-11";
 
+/** New accounts are paused for now; existing accounts can still sign in. Set to false to open sign-ups again. */
+const SIGN_UPS_PAUSED = true;
+
 export interface Account {
   session: Session;
   name: string | null;
@@ -78,11 +81,17 @@ export function SignIn({ account, onChange }: { account: Account | null; onChang
     <form className="flex flex-col gap-3 max-w-md" onSubmit={(e) => {
       e.preventDefault();
       void run(async () => {
-        const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
+        const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: !SIGN_UPS_PAUSED } });
+        if (error?.code === "otp_disabled") throw new Error("NO ACCOUNT USES THAT EMAIL, AND NEW SIGN-UPS ARE PAUSED FOR NOW.");
         if (error) throw error;
         setStep("code");
       });
     }}>
+      {SIGN_UPS_PAUSED && (
+        <p className="border-3 border-ink bg-ink text-paper px-3 py-2 font-mono text-xs">
+          NEW SIGN-UPS ARE PAUSED FOR NOW. IF YOU ALREADY HAVE AN ACCOUNT, YOU CAN STILL SIGN IN.
+        </p>
+      )}
       <label className="flex flex-col gap-2">
         <span className="text-sm font-extrabold">SIGN IN WITH YOUR EMAIL</span>
         <input className={input} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

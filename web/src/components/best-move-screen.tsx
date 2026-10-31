@@ -142,9 +142,9 @@ export function BestMoveScreen() {
           <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px]">
             <Legend className="bg-accent" label="YOUR HAND" />
             <Legend className="bg-ink" label="PLAYED BY A SEAT" />
-            <Legend className="bg-paper border-2 border-ink" label="OUT OF THE GAME" />
+            <Legend className="bg-paper hatch border-2 border-ink" label="OUT OF THE GAME" />
             <Legend className="bg-card border-2 border-ink" label="NOT SEEN YET" />
-            <span>THE ORANGE BAR MARKS THE TRICK ON THE TABLE.</span>
+            <span>THE BAR UNDER A CARD MARKS THE TRICK ON THE TABLE.</span>
           </div>
 
           <div className="border-3 border-ink bg-card p-4 shadow-brutal-sm">

@@ -103,7 +103,7 @@ export function ProfileScreen() {
                   <div key={d} className="flex flex-col gap-2">
                     <div className="flex justify-between items-baseline">
                       <span className="font-extrabold">{d.toUpperCase()}</span>
-                      <span className="font-mono text-sm">{wins} WINS OF {games}</span>
+                      <span className="font-mono text-sm">{wins} {wins === 1 ? "WIN" : "WINS"} OF {games}</span>
                     </div>
                     <Bar value={wins} max={games} label={`${d} wins`} />
                   </div>

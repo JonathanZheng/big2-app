@@ -33,3 +33,9 @@ export function highCardsElsewhere(history: Play[], myHand: Card[]): { twos: num
   const count = (r: number) => [0, 1, 2, 3].filter((s) => !gone.has(r * 4 + s)).length;
   return { twos: count(12), aces: count(11) };
 }
+
+/** Short seat labels for the cards-played grid: the first letter plus any number ("Bot 2" is B2), or seat numbers if two would match. */
+export function seatLabels(names: string[]): string[] {
+  const labels = names.map((name) => name[0].toUpperCase() + (name.match(/\d+$/)?.[0] ?? ""));
+  return new Set(labels).size === names.length ? labels : names.map((_, seat) => String(seat + 1));
+}
