@@ -45,8 +45,8 @@ export function AdvicePanel({ status, onPick, idleText }: {
             <button
               type="button"
               onClick={() => onPick(a.cards)}
-              className={`w-full grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 border-b-2 border-ink text-left hover:bg-paper ${
-                i === 0 ? "bg-accent hover:bg-accent" : "bg-card"
+              className={`w-full grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 border-b-2 border-ink text-left ${
+                i === 0 ? "bg-accent" : "bg-card hover:bg-paper"
               }`}
             >
               <span className="flex flex-col gap-1.5">
