@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AccentPicker } from "@/components/accent-picker";
+import { AccountSection } from "@/components/account-section";
+import { ReviewPanel } from "@/components/review-panel";
 import { SUIT_SYMBOLS } from "@/lib/engine/cards";
 import { MoveType } from "@/lib/engine/moves";
+import { ModelClient } from "@/lib/model/client";
+import { type SlipKind, summariseAnalyses } from "@/lib/session/analysis";
 import { type GameRecord, clearProfile, readGameRecords, summarise } from "@/lib/session/profile";
+import { type SavedReview, deleteSavedReview, readSavedReviews } from "@/lib/session/saved-reviews";
 import { readStats } from "@/lib/session/stats";
 
 const COMBOS: [MoveType, string][] = [
@@ -18,6 +24,11 @@ const COMBOS: [MoveType, string][] = [
   [MoveType.StraightFlush, "STRAIGHT FLUSH"],
 ];
 const SUIT_NAMES = ["DIAMONDS", "CLUBS", "HEARTS", "SPADES"];
+const SLIPS: Record<SlipKind, string> = {
+  passedInstead: "PASSING WHEN THE BOT WOULD PLAY",
+  playedInstead: "PLAYING WHEN THE BOT WOULD PASS",
+  otherPlay: "PLAYING A DIFFERENT COMBINATION FROM THE BOT",
+};
 const button = "border-3 border-ink font-extrabold";
 
 // Read straight from storage on every render; the server has no stats.
@@ -25,20 +36,29 @@ const subscribe = (onChange: () => void) => {
   window.addEventListener("storage", onChange);
   return () => window.removeEventListener("storage", onChange);
 };
-const snapshot = () => JSON.stringify([readGameRecords(), readStats()]);
+const snapshot = () => JSON.stringify([readGameRecords(), readStats(), readSavedReviews()]);
 
 export function ProfileScreen() {
   const [, setVersion] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [open, setOpen] = useState<SavedReview | null>(null);
+  // The model only loads when a saved review is opened.
+  const client = useRef<ModelClient | null>(null);
+  const getClient = useCallback(() => {
+    if (!client.current) client.current = new ModelClient();
+    return client.current;
+  }, []);
+  useEffect(() => () => client.current?.dispose(), []);
   const raw = useSyncExternalStore(subscribe, snapshot, () => null);
   const data = useMemo(() => {
     if (raw === null) return null;
-    const [records, stats] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>];
-    return { profile: summarise(records), stats };
+    const [records, stats, reviews] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>, SavedReview[]];
+    const play = summariseAnalyses(records.flatMap((r) => (r.analysis ? [r.analysis] : [])));
+    return { profile: summarise(records), stats, reviews, play };
   }, [raw]);
 
   if (!data) return <p className="font-mono text-sm">LOADING STATS...</p>;
-  const { profile: p, stats } = data;
+  const { profile: p, stats, reviews, play } = data;
 
   return (
     <div className="flex flex-col gap-8">
@@ -118,6 +138,40 @@ export function ProfileScreen() {
             </Section>
           </div>
 
+          <Section title="YOUR PLAY VS THE BOT">
+            {play === null ? (
+              <p className="font-mono text-sm">YOUR NEXT FINISHED GAME IS COMPARED WITH THE BOT&apos;S CHOICES AND SHOWS UP HERE.</p>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <p className="font-mono text-sm">
+                  {play.best} OF YOUR {play.moves} MOVES WERE THE BOT&apos;S TOP CHOICE, OVER {play.games} {play.games === 1 ? "GAME" : "GAMES"}.
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <Tile label="INACCURACIES" value={play.perGame.inaccuracies} note="PER GAME" />
+                  <Tile label="MISTAKES" value={play.perGame.mistakes} note="PER GAME" />
+                  <Tile label="BLUNDERS" value={play.perGame.blunders} note="PER GAME" />
+                </div>
+                {play.commonestSlip && (
+                  <p className="font-mono text-sm">
+                    YOUR MOST COMMON SLIP: <strong>{SLIPS[play.commonestSlip]}</strong>
+                  </p>
+                )}
+                <div className="flex flex-col gap-2">
+                  <span className="font-mono text-xs">SLIPS IN YOUR LAST {play.recentSlips.length} ANALYSED GAMES, OLDEST FIRST</span>
+                  <div className="flex items-end gap-1.5 h-24 border-b-3 border-ink" role="img"
+                    aria-label={`Slips per game: ${play.recentSlips.join(", ")}`}>
+                    {play.recentSlips.map((n, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+                        <span className="font-mono text-[11px]">{n}</span>
+                        <div className="w-full bg-ink" style={{ height: `${(n / Math.max(1, ...play.recentSlips)) * 70}%` }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
+
           <div className="grid grid-cols-2 gap-4">
             <Tile label="CARDS LEFT WHEN YOU LOSE" value={p.avgCardsLeftWhenLosing ?? "NONE"} note="AVERAGE" />
             <Tile label="HINTS PER GAME" value={p.hintsPerGame ?? 0} note="TURNS WITH A HINT" />
@@ -148,6 +202,54 @@ export function ProfileScreen() {
             </div>
           </Section>
         </>
+      )}
+
+      <Section title="ACCOUNT">
+        <AccountSection />
+      </Section>
+
+      <Section title="COLOUR">
+        <p className="font-mono text-xs">USED FOR YOUR CARDS, ACTIVE TABS AND MAIN BUTTONS. SAVED IN THIS BROWSER.</p>
+        <AccentPicker />
+      </Section>
+
+      <Section title="SAVED REVIEWS">
+        {reviews.length === 0 ? (
+          <p className="font-mono text-sm">NO SAVED REVIEWS. AFTER A GAME, OPEN REVIEW AND PRESS SAVE REVIEW.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {reviews.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink/20 py-2.5">
+                <span className="flex flex-col">
+                  <span className="font-extrabold text-sm">{r.title}</span>
+                  <span className="font-mono text-[11px]">
+                    {new Date(r.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }).toUpperCase()}
+                    {" · "}{r.final.history.length} MOVES
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  <button type="button" onClick={() => setOpen(r)} className={`${button} px-3 py-2 text-xs bg-accent shadow-brutal-sm`}>OPEN</button>
+                  <button type="button" className={`${button} px-3 py-2 text-xs bg-card shadow-brutal-sm`}
+                    onClick={() => { deleteSavedReview(r.id); setVersion((v) => v + 1); }}>DELETE</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {open && (
+        <ReviewPanel
+          final={open.final}
+          getClient={getClient}
+          onClose={() => setOpen(null)}
+          names={open.names}
+          seats={open.seats}
+          youSeat={open.youSeat}
+          players={open.players}
+          scoreAll={open.scoreAll}
+          saved
+        />
       )}
     </div>
   );

@@ -20,7 +20,9 @@ import {
   type GameMode, type MatchConfig, type MatchState, endMatch, humanSeats, isBotSeat, matchWinners, nextGame,
   playMove, seatNames, startMatch,
 } from "@/lib/session/match";
-import { gameRecord, saveGameRecord } from "@/lib/session/profile";
+import { analyseGame } from "@/lib/session/analysis";
+import { attachAnalysis, gameRecord, saveGameRecord } from "@/lib/session/profile";
+import { saveReview } from "@/lib/session/saved-reviews";
 import { recordGame, recordMatch } from "@/lib/session/stats";
 
 type ModelStatus = "loading" | "ready" | "failed";
@@ -357,9 +359,17 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
     if (friends || game.winner === null || recordedGame.current === game) return;
     recordedGame.current = game;
     recordGame(game.winner === 0);
-    saveGameRecord(gameRecord(game, 0, config.difficulty, hintTurns.current.size, Date.now()));
+    const at = Date.now();
+    saveGameRecord(gameRecord(game, 0, config.difficulty, hintTurns.current.size, at));
     hintTurns.current = new Set();
-  }, [config.difficulty, friends, game]);
+    // Compare my moves with the bot's in the background, for the profile's summary.
+    const client = getClient();
+    if (client) {
+      analyseGame(game, 0, (state, player) => client.score(state, player))
+        .then((analysis) => attachAnalysis(at, analysis))
+        .catch(() => undefined); // the game stays recorded without an analysis
+    }
+  }, [config.difficulty, friends, game, getClient]);
 
   const recordedMatch = useRef<MatchState | null>(null);
   useEffect(() => {
@@ -678,6 +688,20 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
           seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
           youSeat={friends ? -1 : 0}
           players={humans}
+          scoreAll
+          onSave={() => saveReview({
+            id: `game-${match.seed}-${match.gameIndex}`,
+            at: Date.now(),
+            title: friends
+              ? `VS FRIENDS · ${humans.length} PEOPLE · ${names[game.winner ?? 0].toUpperCase()} WON`
+              : `VS BOTS · ${config.difficulty.toUpperCase()} · ${game.winner === 0 ? "WON" : "LOST"}`,
+            final: game,
+            names,
+            seats: friends ? [0, 1, 2, 3] : [1, 2, 3],
+            youSeat: friends ? -1 : 0,
+            players: humans,
+            scoreAll: true,
+          })}
         />
       )}
     </div>

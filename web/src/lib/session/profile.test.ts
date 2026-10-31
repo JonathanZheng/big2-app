@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCards } from "@/lib/engine/cards";
 import type { GameState, Play } from "@/lib/engine/game";
 import { MoveType } from "@/lib/engine/moves";
-import { type GameRecord, clearProfile, gameRecord, readGameRecords, saveGameRecord, summarise } from "./profile";
+import { type GameRecord, attachAnalysis, clearProfile, gameRecord, readGameRecords, saveGameRecord, summarise } from "./profile";
 
 const play = (player: number, cards: string): Play => ({ player, cards: cards ? parseCards(cards) : [] });
 
@@ -90,6 +90,22 @@ describe("storage", () => {
     expect(saved[0].at).toBe(5);
     clearProfile();
     expect(readGameRecords()).toEqual([]);
+  });
+
+  it("attaches a later analysis to the game it belongs to", () => {
+    const data = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    });
+    saveGameRecord(record(true, { at: 1 }));
+    saveGameRecord(record(false, { at: 2 }));
+    const analysis = { moves: 9, best: 5, good: 2, inaccuracies: 1, mistakes: 1, blunders: 0, passedInstead: 1, playedInstead: 0, otherPlay: 1 };
+    attachAnalysis(2, analysis);
+    const saved = readGameRecords();
+    expect(saved[0].analysis).toBeUndefined();
+    expect(saved[1].analysis).toEqual(analysis);
   });
 
   it("reads nothing and does not throw when storage is blocked or corrupt", () => {

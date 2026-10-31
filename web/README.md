@@ -2,7 +2,7 @@
 
 Next.js 16, React 19 and Tailwind 4. The design is in `../docs/superpowers/specs/2026-10-30-web-app-design.md`.
 
-Current state: vs bots, one-device vs friends, Best move, following a real game and game review are playable. Accounts and online play are not built yet.
+Current state: vs bots, vs friends on one device or online, Best move, following a real game, game review, the daily puzzle, the profile and the rules page are built. The app can be installed on a phone and works offline, except for online play.
 
 - `src/lib/engine`: the game rules, legal moves and game state, checked against positions exported from the Python engine
 - `src/lib/model`: the trained model's input encoding and network (weights in `public/model/`), run in a Web Worker with a main-thread fallback, plus the evaluation and move labels
@@ -26,9 +26,9 @@ npm run build
 
 ## Environment variables
 
-None are needed until login and online play are built. Bots, pass-and-play and Best move run entirely in the browser.
+Bots, one-device play, Best move and the daily puzzle run entirely in the browser and need none. Accounts and online play need these. Without them the app still runs, and the online tab says it is not set up.
 
-For login and online play, copy `.env.example` to `.env.local` and fill in:
+Copy `.env.example` to `.env.local` and fill in:
 
 | Name | Where to find it | Exposed to the browser |
 |---|---|---|
@@ -42,12 +42,34 @@ For login and online play, copy `.env.example` to `.env.local` and fill in:
 
 1. In Vercel, Add New > Project, and import `JonathanZheng/big2-app` once.
 2. Set **Root Directory** to `web`. Vercel detects Next.js and its build settings.
-3. Under Environment Variables, add the three names above for Production and Preview (once login is built).
+3. Under Environment Variables, add the three names above for Production and Preview.
 4. Deploy. Every push to `main` deploys to production, and every pull request gets a preview link.
 
-Supabase settings to make once login is built:
+Supabase:
+
+- Link the project and push the database: `supabase link --project-ref <ref>` then `supabase db push` (from `web/`). This creates the tables and the rules that keep each hand private.
 
 - Authentication > Providers: turn on Email.
 - Authentication > Email Templates: make the sign-in email show the code (`{{ .Token }}`) rather than only a link.
 - Authentication > URL Configuration: set Site URL to the Vercel production address, and add the preview addresses (`https://*-<your-vercel-team>.vercel.app/**`) to Redirect URLs.
 - Authentication > SMTP Settings: connect an email sender such as Resend. Supabase's built-in sender is for testing and only sends a few emails per hour.
+
+## Online play locally
+
+Needs Docker and the Supabase CLI.
+
+```bash
+cd web
+supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta
+supabase status -o env   # copy the API URL, publishable key and secret key into .env.local
+npm run dev
+```
+
+Sign-in emails go to the local inbox at http://127.0.0.1:54324, and show the 6-digit code.
+
+End-to-end check of online play (creates test users in the local Supabase), with the app running on port 3123:
+
+```bash
+ONLINE_TEST_APP=http://localhost:3123 npx vitest run src/lib/online/online.integration.test.ts
+```
+

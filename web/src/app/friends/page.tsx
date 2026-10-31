@@ -1,5 +1,11 @@
-import { GameScreen } from "@/components/game-screen";
+import { Suspense } from "react";
+import { FriendsScreen } from "@/components/friends-screen";
 
 export default function Page() {
-  return <GameScreen mode="friends" />;
+  // The room code comes from the link, which is only known in the browser.
+  return (
+    <Suspense fallback={<p className="font-mono text-sm">LOADING...</p>}>
+      <FriendsScreen />
+    </Suspense>
+  );
 }

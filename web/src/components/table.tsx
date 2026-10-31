@@ -62,7 +62,7 @@ export function Table({ game, thinking, names = SEAT_NAMES, seats = [1, 2, 3], y
               ? `TO BEAT: ${names[game.lastPlay.player].toUpperCase()}`
               : game.firstMove
                 ? "OPENING: MUST INCLUDE 3♦"
-                : `${names[game.current].toUpperCase()} LEADS`}
+                : names[game.current] === "You" ? "YOU LEAD" : `${names[game.current].toUpperCase()} LEADS`}
           </span>
           {game.lastPlay && <span>{game.passes} {game.passes === 1 ? "PASS" : "PASSES"}</span>}
         </div>

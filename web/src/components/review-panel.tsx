@@ -5,7 +5,7 @@ import { CardFace } from "@/components/card";
 import { Table } from "@/components/table";
 import { type Card, cardName } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
-import { type Label, rankAdvice } from "@/lib/model/advice";
+import { type Label, evaluation, rankAdvice } from "@/lib/model/advice";
 import type { ModelClient } from "@/lib/model/client";
 import { myDecisions, reviewStates } from "@/lib/session/review";
 import { SEAT_NAMES } from "@/lib/session/match";
@@ -14,10 +14,19 @@ const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:
 const key = (cards: Card[]) => [...cards].sort((a, b) => a - b).join(",");
 const DEFAULT_PLAYERS = [0];
 
-type Mark = { label: Label; best: Card[] } | "pending" | "unavailable";
+/** The model's view of one move: its label, the best option, and both scores on the evaluation scale. */
+type Mark = { label: Label; best: Card[]; score: number; bestScore: number } | "pending" | "unavailable";
 
-/** Step through a finished game, with a label for each of my moves. */
-export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, seats = [1, 2, 3], youSeat = 0, players = DEFAULT_PLAYERS }: {
+const formatScore = (v: number) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
+
+/**
+ * Step through a finished game. Every scored move gets a label and the
+ * model's score; the summary counts only `players`' moves.
+ */
+export function ReviewPanel({
+  final, getClient, onClose, names = SEAT_NAMES, seats = [1, 2, 3], youSeat = 0, players = DEFAULT_PLAYERS,
+  scoreAll = false, onSave, saved: savedAtStart = false,
+}: {
   final: GameState;
   getClient: () => ModelClient | null;
   onClose: () => void;
@@ -25,9 +34,16 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
   seats?: number[];
   youSeat?: number;
   players?: number[];
+  /** Score every seat's moves. Only true when every hand is known. */
+  scoreAll?: boolean;
+  /** Save this review; returns false if the browser refused. */
+  onSave?: () => boolean;
+  saved?: boolean;
 }) {
   const states = useMemo(() => reviewStates(final), [final]);
-  const decisions = useMemo(() => myDecisions(final, players), [final, players]);
+  const scoredPlayers = useMemo(() => (scoreAll ? [0, 1, 2, 3] : players), [players, scoreAll]);
+  const decisions = useMemo(() => myDecisions(final, scoredPlayers), [final, scoredPlayers]);
+  const [saveState, setSaveState] = useState<"unsaved" | "saved" | "failed">(savedAtStart ? "saved" : "unsaved");
   const [step, setStep] = useState(0);
   const [marks, setMarks] = useState<Record<number, Mark>>(() =>
     Object.fromEntries(decisions.map((d) => [d.step, "pending"])),
@@ -51,9 +67,13 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
           if (cancelled) return;
           const advice = rankAdvice(moves, scores);
           const chosen = advice.find((a) => key(a.cards) === key(decision.cards));
+          const chosenIndex = moves.findIndex((m) => key(m) === key(decision.cards));
+          const bestScore = Math.max(...scores);
           setMarks((previous) => ({
             ...previous,
-            [decision.step]: chosen ? { label: chosen.label, best: advice[0].cards } : "unavailable",
+            [decision.step]: chosen && chosenIndex >= 0
+              ? { label: chosen.label, best: advice[0].cards, score: evaluation(scores[chosenIndex]), bestScore: evaluation(bestScore) }
+              : "unavailable",
           }));
         } catch {
           if (cancelled) return;
@@ -68,12 +88,13 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
 
   const game = states[step];
   const play = step === 0 ? null : final.history[step - 1];
-  const mark = play && players.includes(play.player) ? marks[step - 1] : null;
+  const mark = play && scoredPlayers.includes(play.player) ? marks[step - 1] : null;
   const handSeat = players.length > 1 ? (players.includes(game.current) ? game.current : null) : 0;
   const shownHand = handSeat === null ? [] : game.hands[handSeat];
   const counts = { Inaccuracy: 0, Mistake: 0, Blunder: 0 };
-  for (const m of Object.values(marks)) {
-    if (m === "pending" || m === "unavailable") continue;
+  for (const d of decisions) {
+    const m = marks[d.step];
+    if (!players.includes(d.player) || m === "pending" || m === "unavailable") continue;
     if (m.label === "Inaccuracy" || m.label === "Mistake" || m.label === "Blunder") counts[m.label] += 1;
   }
 
@@ -85,11 +106,23 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
             <h2 className="text-4xl font-black tracking-tight leading-none">GAME REVIEW</h2>
             <p className="mt-2 font-mono text-xs">
               {done < decisions.length
-                ? `ANALYSING YOUR MOVES: ${done} OF ${decisions.length}`
-                : `INACCURACIES ${counts.Inaccuracy} · MISTAKES ${counts.Mistake} · BLUNDERS ${counts.Blunder}`}
+                ? `ANALYSING MOVES: ${done} OF ${decisions.length}`
+                : `YOUR INACCURACIES ${counts.Inaccuracy} · MISTAKES ${counts.Mistake} · BLUNDERS ${counts.Blunder}`}
+            </p>
+            <p className="mt-1 font-mono text-[11px] opacity-70">
+              SCORE IS THE BOT&apos;S EVALUATION OF EACH MOVE FOR THE PLAYER WHO MADE IT. 0 IS EVEN.
             </p>
           </div>
-          <button type="button" onClick={onClose} className={`${button} px-4 py-2 bg-card shadow-brutal-sm`}>CLOSE</button>
+          <div className="flex flex-wrap gap-3">
+            {onSave && (
+              <button type="button" disabled={saveState === "saved"}
+                onClick={() => setSaveState(onSave() ? "saved" : "failed")}
+                className={`${button} px-4 py-2 bg-accent shadow-brutal-sm`}>
+                {saveState === "saved" ? "SAVED" : saveState === "failed" ? "COULD NOT SAVE. TRY AGAIN" : "SAVE REVIEW"}
+              </button>
+            )}
+            <button type="button" onClick={onClose} className={`${button} px-4 py-2 bg-card shadow-brutal-sm`}>CLOSE</button>
+          </div>
         </header>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -136,8 +169,12 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
               {mark && mark !== "pending" && mark !== "unavailable" && (
                 <div className="mt-3 flex flex-col gap-2 border-t-2 border-ink pt-3">
                   <div className="font-mono text-sm">
-                    {play?.player === 0 ? "YOUR MOVE" : `${names[play!.player].toUpperCase()} MOVE`}:{" "}
+                    {names[play!.player] === "You" ? "YOUR MOVE" : `${names[play!.player].toUpperCase()}'S MOVE`}:{" "}
                     <span className="font-extrabold">{mark.label.toUpperCase()}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-4 font-mono text-sm">
+                    <span>SCORE <span className="font-extrabold">{formatScore(mark.score)}</span></span>
+                    <span>BEST AVAILABLE <span className="font-extrabold">{formatScore(mark.bestScore)}</span></span>
                   </div>
                   {key(mark.best) !== key(play?.cards ?? []) && (
                     <div className="font-mono text-xs">
@@ -157,13 +194,20 @@ export function ReviewPanel({ final, getClient, onClose, names = SEAT_NAMES, sea
               START
             </button>
             {final.history.map((p, i) => {
-              const m = players.includes(p.player) ? marks[i] : null;
+              const m = scoredPlayers.includes(p.player) ? marks[i] : null;
               return (
                 <button key={i} type="button" onClick={() => setStep(i + 1)}
-                  className={`border-b-2 border-ink px-3 py-2 text-left font-mono text-xs ${step === i + 1 ? "bg-accent" : "bg-paper"}`}>
-                  <span className="font-extrabold">{names[p.player].toUpperCase()}</span>{" "}
-                  {p.cards.length === 0 ? "PASS" : p.cards.map(cardName).join(" ")}
-                  {m && m !== "pending" && m !== "unavailable" && <span className="ml-2 font-extrabold">{m.label.toUpperCase()}</span>}
+                  className={`grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b-2 border-ink px-3 py-2 text-left font-mono text-xs ${
+                    step === i + 1 ? "bg-accent" : "bg-paper"
+                  }`}>
+                  <span>
+                    <span className="font-extrabold">{names[p.player].toUpperCase()}</span>{" "}
+                    {p.cards.length === 0 ? "PASS" : p.cards.map(cardName).join(" ")}
+                    {m && m !== "pending" && m !== "unavailable" && <span className="ml-2 font-extrabold">{m.label.toUpperCase()}</span>}
+                  </span>
+                  <span className="tabular-nums">
+                    {m === "pending" ? "..." : m && m !== "unavailable" ? formatScore(m.score) : ""}
+                  </span>
                 </button>
               );
             })}
