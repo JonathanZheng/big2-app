@@ -324,7 +324,7 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
                 {names[s.seat].toUpperCase()}: {room.wins[s.seat]} {room.wins[s.seat] === 1 ? "WIN" : "WINS"}
                 {s.bot && s.user_id ? " · BOT PLAYING" : ""}
                 {away(s) && s.seat !== me ? " · AWAY" : ""}
-                {isHost && s.seat !== me && away(s) && (
+                {isHost && !matchOver && s.seat !== me && away(s) && (
                   <button type="button" onClick={() => void send("takeover", { seat: s.seat })}
                     className="ml-2 underline font-semibold">HAND TO A BOT</button>
                 )}
