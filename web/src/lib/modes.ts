@@ -7,7 +7,7 @@ export const MODES = [
   {
     href: "/friends",
     label: "VS FRIENDS",
-    summary: "Pass one device around the table. Bots fill any empty seats.",
+    summary: "Pass one device around the table, or play online with a room link. Bots fill any empty seats.",
   },
   {
     href: "/best-move",

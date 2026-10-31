@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  // Hard bots in online rooms read the model files on the server.
+  outputFileTracingIncludes: { "/api/online": ["./public/model/**"] },
   async headers() {
     return [
       {

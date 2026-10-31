@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AccentPicker } from "@/components/accent-picker";
+import { AccountSection } from "@/components/account-section";
 import { ReviewPanel } from "@/components/review-panel";
 import { SUIT_SYMBOLS } from "@/lib/engine/cards";
 import { MoveType } from "@/lib/engine/moves";
@@ -202,6 +203,10 @@ export function ProfileScreen() {
           </Section>
         </>
       )}
+
+      <Section title="ACCOUNT">
+        <AccountSection />
+      </Section>
 
       <Section title="COLOUR">
         <p className="font-mono text-xs">USED FOR YOUR CARDS, ACTIVE TABS AND MAIN BUTTONS. SAVED IN THIS BROWSER.</p>
