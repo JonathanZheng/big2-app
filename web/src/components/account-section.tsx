@@ -33,7 +33,8 @@ export function AccountSection() {
       </div>
       {stats && (
         <p className="font-mono text-sm">
-          ONLINE: {stats.wins} WINS FROM {stats.games} {stats.games === 1 ? "GAME" : "GAMES"} · {stats.match_wins} MATCHES WON OF {stats.matches}
+          ONLINE: {stats.wins} {stats.wins === 1 ? "WIN" : "WINS"} FROM {stats.games} {stats.games === 1 ? "GAME" : "GAMES"} ·{" "}
+          {stats.match_wins} {stats.match_wins === 1 ? "MATCH" : "MATCHES"} WON OF {stats.matches}
         </p>
       )}
     </div>
