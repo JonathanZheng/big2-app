@@ -6,6 +6,7 @@ import type { Difficulty } from "@/lib/bots/bots";
 import { suit } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { MoveType, detectMoveType } from "@/lib/engine/moves";
+import type { GameAnalysis } from "./analysis";
 
 const KEY = "big2.games.v1";
 const STATS_KEY = "big2.stats.v1";
@@ -24,6 +25,8 @@ export interface GameRecord {
   suits: number[];
   /** Turns on which I asked for a hint. */
   hints: number;
+  /** How my moves compared with the bot's, added once the game has been analysed. */
+  analysis?: GameAnalysis;
 }
 
 export interface Profile {
@@ -108,6 +111,17 @@ export function saveGameRecord(record: GameRecord) {
     localStorage.setItem(KEY, JSON.stringify([...readGameRecords(), record].slice(-KEEP)));
   } catch {
     // Storage blocked: the profile simply is not kept.
+  }
+}
+
+/** Add the analysis of a saved game, found by when it ended. */
+export function attachAnalysis(at: number, analysis: GameAnalysis) {
+  try {
+    const records = readGameRecords();
+    if (!records.some((r) => r.at === at)) return;
+    localStorage.setItem(KEY, JSON.stringify(records.map((r) => (r.at === at ? { ...r, analysis } : r))));
+  } catch {
+    // Storage blocked: the analysis is not kept.
   }
 }
 

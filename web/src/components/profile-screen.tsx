@@ -7,6 +7,7 @@ import { ReviewPanel } from "@/components/review-panel";
 import { SUIT_SYMBOLS } from "@/lib/engine/cards";
 import { MoveType } from "@/lib/engine/moves";
 import { ModelClient } from "@/lib/model/client";
+import { type SlipKind, summariseAnalyses } from "@/lib/session/analysis";
 import { type GameRecord, clearProfile, readGameRecords, summarise } from "@/lib/session/profile";
 import { type SavedReview, deleteSavedReview, readSavedReviews } from "@/lib/session/saved-reviews";
 import { readStats } from "@/lib/session/stats";
@@ -22,6 +23,11 @@ const COMBOS: [MoveType, string][] = [
   [MoveType.StraightFlush, "STRAIGHT FLUSH"],
 ];
 const SUIT_NAMES = ["DIAMONDS", "CLUBS", "HEARTS", "SPADES"];
+const SLIPS: Record<SlipKind, string> = {
+  passedInstead: "PASSING WHEN THE BOT WOULD PLAY",
+  playedInstead: "PLAYING WHEN THE BOT WOULD PASS",
+  otherPlay: "PLAYING A DIFFERENT COMBINATION FROM THE BOT",
+};
 const button = "border-3 border-ink font-extrabold";
 
 // Read straight from storage on every render; the server has no stats.
@@ -46,11 +52,12 @@ export function ProfileScreen() {
   const data = useMemo(() => {
     if (raw === null) return null;
     const [records, stats, reviews] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>, SavedReview[]];
-    return { profile: summarise(records), stats, reviews };
+    const play = summariseAnalyses(records.flatMap((r) => (r.analysis ? [r.analysis] : [])));
+    return { profile: summarise(records), stats, reviews, play };
   }, [raw]);
 
   if (!data) return <p className="font-mono text-sm">LOADING STATS...</p>;
-  const { profile: p, stats, reviews } = data;
+  const { profile: p, stats, reviews, play } = data;
 
   return (
     <div className="flex flex-col gap-8">
@@ -129,6 +136,40 @@ export function ProfileScreen() {
               <p className="mt-4 font-mono text-xs">PASSED {p.combos[MoveType.Pass]} TIMES.</p>
             </Section>
           </div>
+
+          <Section title="YOUR PLAY VS THE BOT">
+            {play === null ? (
+              <p className="font-mono text-sm">YOUR NEXT FINISHED GAME IS COMPARED WITH THE BOT&apos;S CHOICES AND SHOWS UP HERE.</p>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <p className="font-mono text-sm">
+                  {play.best} OF YOUR {play.moves} MOVES WERE THE BOT&apos;S TOP CHOICE, OVER {play.games} {play.games === 1 ? "GAME" : "GAMES"}.
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <Tile label="INACCURACIES" value={play.perGame.inaccuracies} note="PER GAME" />
+                  <Tile label="MISTAKES" value={play.perGame.mistakes} note="PER GAME" />
+                  <Tile label="BLUNDERS" value={play.perGame.blunders} note="PER GAME" />
+                </div>
+                {play.commonestSlip && (
+                  <p className="font-mono text-sm">
+                    YOUR MOST COMMON SLIP: <strong>{SLIPS[play.commonestSlip]}</strong>
+                  </p>
+                )}
+                <div className="flex flex-col gap-2">
+                  <span className="font-mono text-xs">SLIPS IN YOUR LAST {play.recentSlips.length} ANALYSED GAMES, OLDEST FIRST</span>
+                  <div className="flex items-end gap-1.5 h-24 border-b-3 border-ink" role="img"
+                    aria-label={`Slips per game: ${play.recentSlips.join(", ")}`}>
+                    {play.recentSlips.map((n, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+                        <span className="font-mono text-[11px]">{n}</span>
+                        <div className="w-full bg-ink" style={{ height: `${(n / Math.max(1, ...play.recentSlips)) * 70}%` }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
 
           <div className="grid grid-cols-2 gap-4">
             <Tile label="CARDS LEFT WHEN YOU LOSE" value={p.avgCardsLeftWhenLosing ?? "NONE"} note="AVERAGE" />
