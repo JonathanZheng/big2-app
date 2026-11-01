@@ -1,7 +1,7 @@
 # JAX GPU experiments and next training run
 
-Status as of 2026-11-01: the environment and best-model configuration sweep are
-implemented. An end-to-end JAX trainer and historical-opponent pool are not.
+Status as of 2026-11-01: the environment, configuration sweep and experimental
+end-to-end JAX trainer are implemented. Historical-opponent mixing is not.
 The current shipped model remains the PyTorch-trained `selfplay_v1`.
 
 ## Measured environment throughput
@@ -70,7 +70,8 @@ There are three separate roles:
 The weights-only file cannot restore the old optimizer or resume its exact
 training state. The current PyTorch CLI resumes full checkpoints from its output
 directory, but does not expose a best-model warm-start option. The JAX sweep
-already loads the exported best weights; warm-start training is future work.
+and trainer load the exported best weights. The trainer starts a fresh optimizer
+unless explicitly resuming a full JAX checkpoint.
 
 ## Proposed opponent comparison
 
@@ -174,3 +175,30 @@ sample lasted only 9–37 ms on synthetic resident data. They suggest rollout
 collection deserves attention first; confirm with longer optimizer runs and an
 integrated trainer before declaring the actual bottleneck. Retain batch 1024 as
 the learning baseline even if larger optimizer batches score better in isolation.
+
+
+## Corrected sweep and first trainer
+
+The user's v2 run used capacity 64, 512 steps and five timed repeats. Repeats
+were consistent after the compilation fix:
+
+| Parallel games | Decisions/s | Games/s |
+| --- | ---: | ---: |
+| 32 | 117,088 | 2,653 |
+| 64 | 149,176 | 3,377 |
+| 128 | 141,984 | 3,226 |
+| 256 | 122,675 | 2,791 |
+| 512 | 121,853 | 2,775 |
+| 1024 | 108,012 | 2,459 |
+
+Batch 64 is the first trainer's default, with capacity 64 and optimizer batch
+1024. At batch 64, overflow affected 0.0067% of decisions; compiler argument,
+output and temporary buffer estimates totaled about 50 MB. These figures are
+frozen-policy rollout results, not integrated training rates or total device memory.
+
+The [training guide](../../experiments/jax_big2/TRAINING.md) describes the
+implemented synchronous rounds, terminal return assignment, checkpoint restore
+and PyTorch export. All 34 local CPU tests pass. The next step is a short AutoDL
+training run, followed by checkpoint evaluation against the starting model,
+Smart and greedy. Recheck batches 64 and 128 with the actual training workload
+before a long run. No claim of improved playing strength has been established.

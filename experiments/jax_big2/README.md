@@ -1,11 +1,12 @@
 # JAX environment experiment
 
-This is an isolated, exact-rule environment prototype, not a replacement trainer.
-It tests whether batching simulation on a GPU is worth pursuing. The existing
-PyTorch trainer and shipped weights are unchanged.
+This isolated JAX implementation includes an environment, benchmarks and an
+experimental end-to-end trainer. The existing PyTorch trainer and shipped weights
+are unchanged. See [TRAINING.md](TRAINING.md) for start, resume and evaluation.
 
 ## What is implemented
 
+- Synchronous all-seat Monte Carlo training, full checkpoints and PyTorch export.
 - Pure JAX reset, legal-action mask, step, terminal rewards and 566-feature observations.
 - All 1,665 subsets of each original 13-card hand (including pass); no action cap.
 - Precomputed move types and comparison values per deal, with remaining cards
@@ -97,9 +98,9 @@ Do not run the full neural network on all padded candidates without measuring
 the cost; compact/bucket candidates with explicit overflow handling instead.
 
 GPU simulation has shown a throughput benefit. The best-policy sweep below
-now measures batched inference and a separate synthetic learner; GPU results
-for that sweep are pending. The next implementation is an end-to-end trainer
-with identical network, observations, rewards and exploration. Keep rollout, inference, terminal-return assignment and optimizer
+now measures batched inference and a separate synthetic learner; the corrected GPU sweep favors 64 parallel games and capacity 64. An
+end-to-end trainer is now implemented with the same network, observations, rewards
+and exploration; its synchronous scheduling differs from the old CPU trainer. Keep rollout, inference, terminal-return assignment and optimizer
 updates on device; porting only the learner leaves Python simulation overhead.
 Check converted weights against PyTorch scores and export checkpoints for the
 existing evaluation scripts. Measure end-to-end games/s, cost per million
@@ -118,7 +119,7 @@ python -m experiments.jax_big2.export
 
 This writes `models/selfplay_v1.npz` plus 476 reference PyTorch scores from
 real game positions. The remote sweep requires no PyTorch installation.
-The exported weights retain float32 values exactly. Future training can start
+The exported weights retain float32 values exactly. The JAX trainer starts
 from these weights with a fresh optimizer; the shipped file has no Adam state.
 
 On the GPU host:

@@ -72,15 +72,18 @@ python3 train_selfplay.py --hours 8
 
 ## JAX GPU experiments
 
-We are testing JAX for batched GPU simulation and inference before building an
-end-to-end JAX trainer. The shipped model was trained with PyTorch on CPU.
+We now have an experimental end-to-end JAX GPU trainer, alongside simulation
+and inference benchmarks. The shipped model was trained with PyTorch on CPU;
+no JAX-trained checkpoint has replaced it.
 
 Implemented in [`experiments/jax_big2/`](experiments/jax_big2/README.md):
 
 - A fixed-shape game environment, checked against the Python rules and encodings.
 - A random-policy environment benchmark.
 - A configuration sweep using frozen best-model weights, plus a separate
-  synthetic optimizer-throughput benchmark. Neither script trains a new bot.
+  synthetic optimizer-throughput benchmark. Neither benchmark trains a new bot.
+- An end-to-end synchronous self-play trainer with best-weight initialization,
+  full checkpoints, resume, and export to the existing PyTorch evaluation tools.
 
 On our AutoDL instance (NVIDIA vGPU-32GB, driver 550.120, Python 3.12.3):
 
@@ -91,6 +94,18 @@ python -m pip install 'jax[cuda12]' numpy pytest optax
 JAX_PLATFORMS=cuda python -m pytest tests -q
 JAX_PLATFORMS=cuda python -m experiments.jax_big2.sweep
 ```
+
+After tests pass, start a five-minute integrated training check:
+
+```bash
+JAX_PLATFORMS=cuda python -m experiments.jax_big2.train \
+  --hours 0.083333 --out checkpoints/jax-smoke
+```
+
+Defaults are 64 parallel games, candidate capacity 64, optimizer batch 1024 and
+learning rate 3e-4. See the [training guide](experiments/jax_big2/TRAINING.md) for
+resume, background runs and export/evaluation. Integrated GPU training performance
+and learning quality still need validation.
 
 The repository includes `models/selfplay_v1.npz`, an export of the shipped
 PyTorch weights, so running the sweep does not require PyTorch. Results are saved
@@ -113,8 +128,8 @@ exploration. Smart and greedy are evaluation opponents; they do not generate
 training games. Evaluation also includes learned models and paired head-to-head
 matches, not just classical bots.
 
-For the future JAX trainer, initialize from `selfplay_v1` with a fresh optimizer
-and first establish a comparable all-seat self-play baseline. Then test mixing
+The JAX trainer initializes from `selfplay_v1` with a fresh optimizer and uses
+all-seat self-play. First validate this baseline, then test mixing
 in frozen historical opponents, starting with `selfplay_v1`, against that baseline.
 This opponent pool is proposed, not implemented. Keep the frozen best model as
 an evaluation reference and retain Smart/greedy checks for regressions. A better
@@ -131,7 +146,7 @@ score against one opponent alone is not enough to establish general improvement.
 | `train_selfplay.py`, `benchmark.py`, `head_to_head.py` | Command line scripts |
 | `scripts/` | Exports for the web app: model weights, test positions, and the label cut-off check |
 | `models/` | The current best model in PyTorch and exported JAX/NumPy formats |
-| `experiments/jax_big2/` | JAX environment, weight export, GPU benchmarks and configuration sweep |
+| `experiments/jax_big2/` | JAX environment, GPU trainer, checkpoint export, benchmarks and configuration sweep |
 | `tests/` | Rule tests, JAX environment parity, and PyTorch/JAX score comparisons |
 | `docs/training/` | Training run reports and their raw logs |
 | `web/` | The web app (Next.js) |
