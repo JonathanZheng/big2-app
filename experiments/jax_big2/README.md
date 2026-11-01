@@ -43,7 +43,8 @@ Initial Mac CPU smoke test, JAX 0.4.35, 128 steps x 3 repeats:
 | JAX, batch 64 | 1,874 | 25.9 |
 
 These short measurements are not a controlled performance study. They show no
-CPU benefit from this prototype. No cloud GPU result has been measured yet.
+CPU benefit from this prototype. A subsequent AutoDL GPU test reached 148,816
+decisions/s at batch 1,024; see the [experiment record](../../docs/training/jax-experiments.md).
 The original training report's ~175 games/s includes model inference and learning
 with multiple actors; it is not comparable to these environment-only rates.
 
@@ -58,7 +59,8 @@ nvidia-smi
 python3 -m venv .venv-jax
 source .venv-jax/bin/activate
 python -m pip install --upgrade pip
-python -m pip install 'jax[cuda13]' numpy pytest
+# AutoDL driver 550.120: use CUDA 12 wheels.
+python -m pip install 'jax[cuda12]' numpy pytest optax
 JAX_PLATFORMS=cpu python -m pytest tests -q
 JAX_PLATFORMS=cuda python -m pytest tests/test_jax_env.py -q
 JAX_PLATFORMS=cuda python -m experiments.jax_big2.benchmark \
@@ -70,7 +72,8 @@ python -m pip freeze > /tmp/big2-jax-packages.txt
 
 Per the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html),
 CUDA 13 requires an NVIDIA driver >=580 and GPU compute capability >=7.5.
-For compatible older machines, use `jax[cuda12]` (driver >=525) instead.
+Our AutoDL driver 550.120 uses `jax[cuda12]` (driver >=525), as above.
+Use `jax[cuda13]` only on hardware and drivers that meet its requirements.
 `--require-gpu` fails if the benchmark is running on CPU.
 
 Save the JSON, package versions, `nvidia-smi` output, machine CPU count and hourly
@@ -93,9 +96,10 @@ lanes that do not need a new deal. Profile reset and move masking before scaling
 Do not run the full neural network on all padded candidates without measuring
 the cost; compact/bucket candidates with explicit overflow handling instead.
 
-If GPU simulation is competitive, the next experiment is batched policy
-inference and a learner with identical network, observations, rewards and
-exploration. Keep rollout, inference, terminal-return assignment and optimizer
+GPU simulation has shown a throughput benefit. The best-policy sweep below
+now measures batched inference and a separate synthetic learner; GPU results
+for that sweep are pending. The next implementation is an end-to-end trainer
+with identical network, observations, rewards and exploration. Keep rollout, inference, terminal-return assignment and optimizer
 updates on device; porting only the learner leaves Python simulation overhead.
 Check converted weights against PyTorch scores and export checkpoints for the
 existing evaluation scripts. Measure end-to-end games/s, cost per million
@@ -157,3 +161,6 @@ The old trainer used all-seat self-play, refreshing actor weights every four
 games. Smart and greedy were evaluation opponents, not training opponents.
 The first JAX training comparison should preserve this setup before experimenting
 with an opponent pool or other algorithm changes.
+
+For measured GPU results and the proposed historical-opponent experiment, see
+[the JAX experiment record](../../docs/training/jax-experiments.md).

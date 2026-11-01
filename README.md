@@ -34,7 +34,8 @@ Standard Big 2 for 4 players, 13 cards each.
 
 ## Setup
 
-Requires Python 3.12 and PyTorch 2.
+The existing CPU trainer requires Python 3.12 and PyTorch 2. The experimental
+JAX GPU workflow has separate dependencies; see below.
 
 ```bash
 pip3 install -r requirements.txt
@@ -58,7 +59,7 @@ Compare two models head-to-head (2 copies of each, random seating, every deal pl
 python3 head_to_head.py models/selfplay_v1.pt checkpoints/selfplay/latest.pt
 ```
 
-Train:
+Train with the existing PyTorch CPU trainer:
 
 ```bash
 python3 train_selfplay.py --hours 8
@@ -66,8 +67,56 @@ python3 train_selfplay.py --hours 8
 
 - Uses 6 actor processes by default (`--actors`).
 - Saves `checkpoints/selfplay/model_<games>.pt` and `latest.pt` every 15 minutes and when it stops. Stop early with `pkill -INT -f train_selfplay.py`.
-- Resumes from `checkpoints/selfplay/latest.pt` when it exists, otherwise starts from scratch. `models/selfplay_v1.pt` has no optimizer state, so it can't be resumed from.
+- Resumes from `checkpoints/selfplay/latest.pt` when it exists, otherwise starts from scratch. `models/selfplay_v1.pt` has no optimizer state. Its weights can initialize a new run with a fresh optimizer, but this CLI does not yet offer that option.
 - `checkpoints/` is not committed. A new model only replaces `models/selfplay_v1.pt` if it beats it head-to-head.
+
+## JAX GPU experiments
+
+We are testing JAX for batched GPU simulation and inference before building an
+end-to-end JAX trainer. The shipped model was trained with PyTorch on CPU.
+
+Implemented in [`experiments/jax_big2/`](experiments/jax_big2/README.md):
+
+- A fixed-shape game environment, checked against the Python rules and encodings.
+- A random-policy environment benchmark.
+- A configuration sweep using frozen best-model weights, plus a separate
+  synthetic optimizer-throughput benchmark. Neither script trains a new bot.
+
+On our AutoDL instance (NVIDIA vGPU-32GB, driver 550.120, Python 3.12.3):
+
+```bash
+python -m venv .venv-jax
+source .venv-jax/bin/activate
+python -m pip install 'jax[cuda12]' numpy pytest optax
+JAX_PLATFORMS=cuda python -m pytest tests -q
+JAX_PLATFORMS=cuda python -m experiments.jax_big2.sweep
+```
+
+The repository includes `models/selfplay_v1.npz`, an export of the shipped
+PyTorch weights, so running the sweep does not require PyTorch. Results are saved
+to `results/policy-sweep.json`. On a Mac, use `JAX_PLATFORMS=cpu` for tests;
+the sweep requires `--allow-cpu` for local smoke checks.
+
+The first GPU environment-only test reached about **148,816 decisions/s** at
+1,024 parallel games, versus 11,807 for one Python worker on the same cloud host.
+This is **12.6x simulation throughput**, not a measured training speedup.
+See the [JAX experiment record and proposed training setup](docs/training/jax-experiments.md)
+for results, limitations and next steps.
+
+## Training opponents and evaluation
+
+The existing trainer uses all-seat self-play: all four seats use recent copies
+of the evolving model, refreshed every four games per actor, with 1% random
+exploration. Smart and greedy are evaluation opponents; they do not generate
+training games. Evaluation also includes learned models and paired head-to-head
+matches, not just classical bots.
+
+For the future JAX trainer, initialize from `selfplay_v1` with a fresh optimizer
+and first establish a comparable all-seat self-play baseline. Then test mixing
+in frozen historical opponents, starting with `selfplay_v1`, against that baseline.
+This opponent pool is proposed, not implemented. Keep the frozen best model as
+an evaluation reference and retain Smart/greedy checks for regressions. A better
+score against one opponent alone is not enough to establish general improvement.
 
 ## Layout
 
@@ -79,8 +128,9 @@ python3 train_selfplay.py --hours 8
 | `big2_ai/training/selfplay.py` | Deep Monte Carlo trainer: actor processes play games, a learner trains on every decision labelled with that player's final result |
 | `train_selfplay.py`, `benchmark.py`, `head_to_head.py` | Command line scripts |
 | `scripts/` | Exports for the web app: model weights, test positions, and the label cut-off check |
-| `models/` | The current best model |
-| `tests/` | Rule tests |
+| `models/` | The current best model in PyTorch and exported JAX/NumPy formats |
+| `experiments/jax_big2/` | JAX environment, weight export, GPU benchmarks and configuration sweep |
+| `tests/` | Rule tests, JAX environment parity, and PyTorch/JAX score comparisons |
 | `docs/training/` | Training run reports and their raw logs |
 | `web/` | The web app (Next.js) |
 | `docs/superpowers/` | Design documents and project plan |

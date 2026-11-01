@@ -5,6 +5,10 @@ The run that produced `models/selfplay_v1.pt`. The raw logs are in `docs/trainin
 - `train.log`: one line per minute with games played, training steps and loss. The `games/s` column is the average since the start of the run, not the current speed.
 - `benchmarks.log`: every saved checkpoint against 3 Smart bots and against 3 copies of the original repo's model (`old`), 2,000 games each. That model was not ported to this repo.
 
+This is the historical PyTorch CPU run. Subsequent JAX GPU benchmarks and the
+proposed warm-start/opponent-pool experiments are tracked separately in
+[jax-experiments.md](jax-experiments.md); they did not produce this checkpoint.
+
 ## Setup
 
 | | |
@@ -15,6 +19,10 @@ The run that produced `models/selfplay_v1.pt`. The raw logs are in `docs/trainin
 | Settings | Exploration 1%, Adam with learning rate 3e-4, batch 1,024, examples shuffled in chunks of 16,384, gradient clipping at 1.0, actors refresh weights every 4 games, checkpoint every 15 minutes |
 | Network | 716K parameters, started from random weights |
 | Benchmarks | Each new checkpoint was benchmarked while training kept running, using 4 more processes |
+
+All training games used four seats controlled by recent copies of the current
+model. Smart, greedy and older learned models were used for evaluation, not as
+training opponents. Actor policies refreshed every four games.
 
 ## Totals
 
