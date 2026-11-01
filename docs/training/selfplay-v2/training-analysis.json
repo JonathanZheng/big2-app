@@ -1,0 +1,77 @@
+{
+  "checkpoint": {
+    "format_version": 1,
+    "config": {
+      "num_envs": 64,
+      "capacity": 64,
+      "batch_size": 1024,
+      "learning_rate": 0.0003,
+      "epsilon": 0.01,
+      "grad_clip": 1.0,
+      "seed": 42,
+      "initial_weights": "models/selfplay_v1.npz",
+      "initial_weights_sha256": "30e2ce49b5bb4939d3c551c0538786a4de44508f31053e840e07a8a59dc477f8",
+      "precision": "highest",
+      "jax_version": "0.12.0.1",
+      "optax_version": "0.2.8"
+    },
+    "stats": {
+      "games": 10072256,
+      "samples": 433789717,
+      "updates": 472265,
+      "rounds": 157379,
+      "train_seconds": 3915.0882315784693
+    },
+    "optimizer_leaves": 19
+  },
+  "evaluation_count": 20,
+  "evaluation_seconds": 290.97424233704805,
+  "logged_round_statistics": {
+    "loss": {
+      "minimum": 0.262999027967453,
+      "median": 0.3407894968986511,
+      "maximum": 0.4225431978702545
+    },
+    "collect_seconds": {
+      "minimum": 0.016809754073619843,
+      "median": 0.020107783377170563,
+      "maximum": 0.027949608862400055
+    },
+    "learn_seconds": {
+      "minimum": 0.001530565321445465,
+      "median": 0.0017371810972690582,
+      "maximum": 0.002993866801261902
+    },
+    "active_lane_fraction": {
+      "minimum": 0.43564356435643564,
+      "median": 0.6068840579710145,
+      "maximum": 0.7463942307692307
+    }
+  },
+  "checkpoint_trend": [
+    {
+      "first_games": 842880,
+      "last_games": 2843008,
+      "paired_mean": 0.5024,
+      "solo_mean": 0.257
+    },
+    {
+      "first_games": 3343040,
+      "last_games": 5343168,
+      "paired_mean": 0.522,
+      "solo_mean": 0.2584
+    },
+    {
+      "first_games": 5843200,
+      "last_games": 7843328,
+      "paired_mean": 0.5319,
+      "solo_mean": 0.268
+    },
+    {
+      "first_games": 8343360,
+      "last_games": 10072256,
+      "paired_mean": 0.5279,
+      "solo_mean": 0.2652
+    }
+  ]
+}

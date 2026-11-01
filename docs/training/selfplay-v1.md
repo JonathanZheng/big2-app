@@ -1,5 +1,8 @@
 # Training run: selfplay_v1
 
+Superseded in the app by [selfplay_v2](selfplay-v2.md). These v1 results and
+model files are retained as the historical evaluation reference.
+
 The run that produced `models/selfplay_v1.pt`. The raw logs are in `docs/training/selfplay-v1/`:
 
 - `train.log`: one line per minute with games played, training steps and loss. The `games/s` column is the average since the start of the run, not the current speed.

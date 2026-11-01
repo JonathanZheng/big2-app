@@ -43,8 +43,9 @@ def label(drop):
 
 
 def main():
+    torch.set_num_threads(1)
     model = SelfPlayNetwork()
-    model.load_state_dict(torch.load("models/selfplay_v1.pt", map_location="cpu")["model_state_dict"])
+    model.load_state_dict(torch.load("models/selfplay_v2.pt", map_location="cpu")["model_state_dict"])
     model.eval()
     counts = Counter()
     for seed in range(GAMES):

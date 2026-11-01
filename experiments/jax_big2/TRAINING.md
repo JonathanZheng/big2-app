@@ -1,7 +1,8 @@
 # JAX Deep Monte Carlo training
 
-The first end-to-end trainer uses all-seat self-play initialized from the shipped
-`selfplay_v1.npz` weights. Default settings follow the corrected AutoDL sweep:
+The first end-to-end trainer uses all-seat self-play initialized by default from the historical
+`selfplay_v1.npz` weights. The app now uses `selfplay_v2`; for a new run from it,
+pass `--weights models/selfplay_v2.npz`. Default settings follow the corrected AutoDL sweep:
 64 games per round, candidate capacity 64, float32/highest precision, Adam at
 3e-4, batch 1024, gradient clipping at 1.0 and 1% exploration. Historical-opponent
 mixing remains a separate future experiment. The [sweep results and verdict](../../docs/training/jax-sweep-results.md)
@@ -108,7 +109,7 @@ python head_to_head.py models/selfplay_v1.pt checkpoints/jax-smoke/latest.pt
 The exported `.pt` contains weights and metadata for the existing evaluation
 scripts; it is not a resumable PyTorch optimizer checkpoint. Resume JAX from the
 original `.npz`. Evaluate the untouched starting model too, and confirm improvements
-with fresh games before replacing `models/selfplay_v1.pt`.
+with fresh games before promoting a new versioned model; retain v1 for comparison.
 
 ## Validation status
 
@@ -136,8 +137,8 @@ JAX_PLATFORMS=cuda python -m experiments.jax_big2.train \
 ```
 
 The new directory preserves the original smoke checkpoint. This continues its
-weights and optimizer; omit `--resume` to start again from the shipped best
-weights with a fresh optimizer. Neither option starts from random weights.
+weights and optimizer; omit `--resume` to start again from the default v1
+weights (or pass `--weights models/selfplay_v2.npz` for v2) with a fresh optimizer. Neither option starts from random weights.
 Use a new directory for a new run. On later resume, pass the evaluation flags
 again: they are runtime options, not restored algorithm settings.
 

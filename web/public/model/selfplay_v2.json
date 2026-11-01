@@ -1,0 +1,75 @@
+{
+ "model": "selfplay_v2",
+ "parent_model": "selfplay_v1",
+ "games": 10072256,
+ "layers": [
+  {
+   "name": "state_in.weight",
+   "shape": [
+    512,
+    566
+   ],
+   "offset": 0
+  },
+  {
+   "name": "state_in.bias",
+   "shape": [
+    512
+   ],
+   "offset": 289792
+  },
+  {
+   "name": "move_in.weight",
+   "shape": [
+    512,
+    61
+   ],
+   "offset": 290304
+  },
+  {
+   "name": "fc2.weight",
+   "shape": [
+    512,
+    512
+   ],
+   "offset": 321536
+  },
+  {
+   "name": "fc2.bias",
+   "shape": [
+    512
+   ],
+   "offset": 583680
+  },
+  {
+   "name": "fc3.weight",
+   "shape": [
+    256,
+    512
+   ],
+   "offset": 584192
+  },
+  {
+   "name": "fc3.bias",
+   "shape": [
+    256
+   ],
+   "offset": 715264
+  },
+  {
+   "name": "out.weight",
+   "shape": [
+    1,
+    256
+   ],
+   "offset": 715520
+  },
+  {
+   "name": "out.bias",
+   "shape": [
+    1
+   ],
+   "offset": 715776
+  }
+ ]
+}

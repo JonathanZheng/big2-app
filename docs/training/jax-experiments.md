@@ -2,7 +2,8 @@
 
 Status as of 2026-11-01: the environment, configuration sweep and experimental
 end-to-end JAX trainer are implemented. Historical-opponent mixing is not.
-The current shipped model remains the PyTorch-trained `selfplay_v1`.
+The app now selects [selfplay_v2](selfplay-v2.md), confirmed against frozen v1.
+The sections below retain the chronological experiment record.
 
 The detailed [sweep results and verdict](jax-sweep-results.md) include both policy
 sweeps, the timing correction, memory estimates and synthetic optimizer results.

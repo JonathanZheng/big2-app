@@ -1,0 +1,3 @@
+checkpoints/jax-full/model_10072256.pt: 5000 games per opponent, random seats, 25% = break-even
+vs 3x smart: win  46.7% +/- 1.4% (better), avg score +3.49  [51s]
+vs 3x greedy: win  55.8% +/- 1.4% (better), avg score +5.74  [58s]

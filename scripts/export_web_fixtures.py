@@ -24,7 +24,7 @@ from big2_ai.models.selfplay_network import SelfPlayNetwork
 from big2_ai.training.selfplay import choose_move
 
 OUT = Path("web/src/lib/engine/__fixtures__/positions.json")
-MODEL = "models/selfplay_v1.pt"
+MODEL = "models/selfplay_v2.pt"
 
 
 def canonical(moves):
@@ -56,6 +56,7 @@ def snapshot(game, model):
 
 
 def main():
+    torch.set_num_threads(1)
     model = SelfPlayNetwork()
     model.load_state_dict(torch.load(MODEL, map_location="cpu")["model_state_dict"])
     model.eval()

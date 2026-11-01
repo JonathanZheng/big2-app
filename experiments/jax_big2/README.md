@@ -1,8 +1,9 @@
 # JAX environment experiment
 
 This isolated JAX implementation includes an environment, benchmarks and an
-experimental end-to-end trainer. The existing PyTorch trainer and shipped weights
-are unchanged. See [TRAINING.md](TRAINING.md) for start, resume and evaluation.
+experimental end-to-end trainer. The existing PyTorch trainer is retained; the app now uses the promoted
+[selfplay_v2](../../docs/training/selfplay-v2.md). Experiments retain v1 defaults
+for reproducibility. See [TRAINING.md](TRAINING.md) for start, resume and evaluation.
 
 ## What is implemented
 

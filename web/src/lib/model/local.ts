@@ -11,11 +11,11 @@ export interface LocalScorer {
 
 export async function createLocalScorer(): Promise<LocalScorer> {
   const [manifest, weights] = await Promise.all([
-    fetch("/model/selfplay_v1.json").then((response) => {
+    fetch("/model/selfplay_v2.json").then((response) => {
       if (!response.ok) throw new Error(`Model manifest: HTTP ${response.status}`);
       return response.json() as Promise<WeightsManifest>;
     }),
-    fetch("/model/selfplay_v1.bin").then((response) => {
+    fetch("/model/selfplay_v2.bin").then((response) => {
       if (!response.ok) throw new Error(`Model weights: HTTP ${response.status}`);
       return response.arrayBuffer();
     }),
