@@ -9,6 +9,9 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
+import subprocess
+import sys
 import time
 
 import jax
@@ -158,10 +161,22 @@ def main():
     parser.add_argument('--save-minutes', type=float, default=15.)
     parser.add_argument('--log-seconds', type=float, default=10.)
     parser.add_argument('--allow-cpu', action='store_true')
+    parser.add_argument('--eval-every-games', type=int, default=0,
+                        help='Evaluate at start/end and every N additional games; 0 disables')
+    parser.add_argument('--eval-reference', type=Path, default=Path('models/selfplay_v1.pt'))
+    parser.add_argument('--eval-deals', type=int, default=1000)
+    parser.add_argument('--eval-workers', type=int, default=4)
     args = parser.parse_args()
     if min(args.num_envs, args.capacity, args.batch_size, args.hours, args.learning_rate,
            args.save_minutes, args.log_seconds) <= 0 or (args.rounds is not None and args.rounds <= 0):
         parser.error('Sizes, rates and durations must be positive')
+    if args.eval_every_games < 0 or min(args.eval_deals, args.eval_workers) < 1:
+        parser.error('Invalid evaluation interval, deals or workers')
+    eval_env = dict(os.environ, JAX_PLATFORMS='cpu', CUDA_VISIBLE_DEVICES='')
+    if args.eval_every_games:
+        if not args.eval_reference.is_file():
+            parser.error('Evaluation reference checkpoint does not exist')
+        subprocess.run([sys.executable, '-c', 'import torch'], env=eval_env, check=True)
     if not 0 <= args.epsilon <= 1 or args.capacity > env.NUM_ACTIONS:
         parser.error('Invalid epsilon or action capacity')
     if not args.allow_cpu and jax.default_backend() != 'gpu':
@@ -182,6 +197,14 @@ def main():
         opt_state = optimizer_for(config).init(params)
         key = jax.random.PRNGKey(args.seed)
         stats = dict(games=0, samples=0, updates=0, rounds=0, train_seconds=0.)
+    eval_reference = args.out / 'evaluation' / 'reference.pt'
+    if args.eval_every_games:
+        eval_reference.parent.mkdir(parents=True, exist_ok=True)
+        if eval_reference.exists():
+            if hashlib.sha256(eval_reference.read_bytes()).digest() != hashlib.sha256(args.eval_reference.read_bytes()).digest():
+                parser.error('Output already contains a different frozen evaluation reference')
+        else:
+            shutil.copyfile(args.eval_reference, eval_reference)
     stop_requested = False
 
     def request_stop(signum, frame):
@@ -211,8 +234,27 @@ def main():
         save_checkpoint(args.out / 'latest.npz', params, opt_state, key, config, stats)
         print(f"Saved {args.out / 'latest.npz'} ({stats['games']:,} games)", flush=True)
 
+    last_eval_games = None
+
+    def evaluate_current():
+        nonlocal last_eval_games
+        save()
+        snapshot = args.out / f"model_{stats['games']}.npz"
+        output = args.out / 'evaluation' / f"eval_{stats['games']}.json"
+        print(f"Evaluating {stats['games']:,} games against frozen {args.eval_reference}; training pauses.", flush=True)
+        subprocess.run([sys.executable, '-m', 'experiments.jax_big2.evaluate', str(snapshot),
+                        '--reference', str(eval_reference), '--deals', str(args.eval_deals),
+                        '--workers', str(args.eval_workers),
+                        '--seed-start', str(stats['games'] * 10_000_000),
+                        '--output', str(output)], env=eval_env, check=True)
+        with (args.out / 'evaluation.jsonl').open('a') as f:
+            f.write(json.dumps(json.loads(output.read_text())) + '\n')
+        last_eval_games = stats['games']
+
     # A failed round never replaces the last known valid checkpoint.
     try:
+        if args.eval_every_games and not stop_requested:
+            evaluate_current()
         while not stop_requested and time.perf_counter() - start < args.hours * 3600:
             if args.rounds is not None and session_rounds >= args.rounds:
                 break
@@ -246,9 +288,15 @@ def main():
                 with (args.out / 'train.jsonl').open('a') as f:
                     f.write(json.dumps(row) + '\n')
                 last_log = now
-            if now - last_save >= args.save_minutes * 60:
+            if (args.eval_every_games and not stop_requested and
+                    stats['games'] - last_eval_games >= args.eval_every_games):
+                evaluate_current()
+                last_save = time.perf_counter()
+            elif now - last_save >= args.save_minutes * 60:
                 save()
                 last_save = time.perf_counter()
+        if args.eval_every_games and not stop_requested and last_eval_games != stats['games']:
+            evaluate_current()
     finally:
         save()
 

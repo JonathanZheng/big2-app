@@ -83,7 +83,8 @@ Implemented in [`experiments/jax_big2/`](experiments/jax_big2/README.md):
 - A configuration sweep using frozen best-model weights, plus a separate
   synthetic optimizer-throughput benchmark. Neither benchmark trains a new bot.
 - An end-to-end synchronous self-play trainer with best-weight initialization,
-  full checkpoints, resume, and export to the existing PyTorch evaluation tools.
+  full checkpoints, resume, periodic evaluation against the frozen old model,
+  and export to the existing PyTorch evaluation tools.
 
 On our AutoDL instance (NVIDIA vGPU-32GB, driver 550.120, Python 3.12.3):
 
@@ -105,8 +106,9 @@ JAX_PLATFORMS=cuda python -m experiments.jax_big2.train \
 Defaults are 64 parallel games, candidate capacity 64, optimizer batch 1024 and
 learning rate 3e-4. The [sweep results and verdict](docs/training/jax-sweep-results.md)
 record why we chose these settings, including the timing fix and memory findings. See the [training guide](experiments/jax_big2/TRAINING.md) for
-resume, background runs and export/evaluation. Integrated GPU training performance
-and learning quality still need validation.
+resume, background runs and export/evaluation. The five-minute AutoDL smoke run completed 842,880 games at about 2,810 games/s;
+playing-strength improvement still needs evaluation. Periodic evaluation can be
+enabled with `--eval-every-games 500000` (requires CPU PyTorch); see the guide.
 
 The repository includes `models/selfplay_v1.npz`, an export of the shipped
 PyTorch weights, so running the sweep does not require PyTorch. Results are saved

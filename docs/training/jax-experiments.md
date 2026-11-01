@@ -78,7 +78,7 @@ unless explicitly resuming a full JAX checkpoint.
 
 ## Proposed opponent comparison
 
-First implement and validate all-seat self-play initialized from the best model.
+First validate the implemented all-seat self-play trainer initialized from the best model.
 This preserves the previous method while changing the execution framework.
 Then compare it against a historical-opponent mixture with the same initial
 weights, algorithm and evaluation schedule.
@@ -205,3 +205,25 @@ and PyTorch export. All 34 local CPU tests pass. The next step is a short AutoDL
 training run, followed by checkpoint evaluation against the starting model,
 Smart and greedy. Recheck batches 64 and 128 with the actual training workload
 before a long run. No claim of improved playing strength has been established.
+
+
+## Integrated smoke run and monitored continuation
+
+The supplied five-minute training log completed 842,880 games and saved
+`checkpoints/jax-smoke/latest.npz`. The last logged cumulative rate was about
+2,810 games/s and 122,404 decisions/s. Logged per-round loss ranged from 0.286 to
+0.385. Median sampled round timings were 19.6 ms for collection and 1.7 ms for
+learning. These samples indicate collection dominates the current workload;
+no playing-strength evaluation has yet been supplied.
+
+The trainer now supports periodic CPU evaluation against a frozen copy of
+`selfplay_v1.pt`. See [the monitored training command](../../experiments/jax_big2/TRAINING.md#training-with-periodic-evaluation-against-selfplay_v1).
+It evaluates at start, every configured game interval and normal completion,
+reporting both 1v3 and paired 2v2 win rates with per-evaluation confidence bounds.
+It preserves snapshots and does not automatically promote or discard models.
+
+The recommendation is pure self-play for the first monitored continuation,
+then a controlled historical-opponent experiment. Beating v1 is evidence of
+progress against v1, not proof of universal superiority or a reason to discard
+that frozen evaluation reference. If used in a future training pool, its weight
+can be reduced as newer historical opponents become useful.

@@ -112,7 +112,76 @@ with fresh games before replacing `models/selfplay_v1.pt`.
 
 ## Validation status
 
-Local CPU validation: 34 tests pass, including full-game target comparison with
+Local CPU validation: 36 tests pass, including full-game target comparison with
 the Python engine, masked-example isolation and exact next-update restoration.
 Short CLI runs cover training, checkpoint saving, resume and evaluation export.
 Integrated GPU performance and learning quality remain to be measured on AutoDL.
+
+## Training with periodic evaluation against selfplay_v1
+
+The trainer can evaluate at session start (including a resumed smoke checkpoint),
+every N additional training games, and at normal session completion. Enable it
+explicitly; the default remains no in-run evaluation. The reference is copied to
+`evaluation/reference.pt` and its hash is recorded. Resuming with a different
+reference in the same output directory is rejected.
+
+Install CPU PyTorch in the cloud virtual environment for evaluation only:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+JAX_PLATFORMS=cuda python -m experiments.jax_big2.train \
+  --resume checkpoints/jax-smoke/latest.npz \
+  --out checkpoints/jax-full --hours 1 \
+  --eval-every-games 500000 --eval-deals 1000 --eval-workers 4
+```
+
+The new directory preserves the original smoke checkpoint. This continues its
+weights and optimizer; omit `--resume` to start again from the shipped best
+weights with a fresh optimizer. Neither option starts from random weights.
+Use a new directory for a new run. On later resume, pass the evaluation flags
+again: they are runtime options, not restored algorithm settings.
+
+Each evaluation saves a numbered NPZ and exported PT checkpoint and plays:
+
+- 1,000 paired deals, each played twice with the two sides swapped: two new-model
+  seats versus two reference seats. Equal-strength baseline: 50%.
+- 1,000 separate deals: one new-model seat versus three reference seats, rotating
+  the new model's seat. Equal-strength baseline: 25%.
+
+Both policies act greedily during evaluation. Deals vary between checkpoints and
+are separate from the training PRNG. Results print to the console, append to
+`evaluation.jsonl`, and save under `evaluation/eval_<games>.json`.
+
+The CPU evaluation runs in a subprocess with CUDA hidden and **pauses training**.
+The session's `--hours` clock and logged aggregate training rates include these
+pauses, so compare them accordingly with evaluation-free runs. Evaluation can
+extend the deadline at the end; Ctrl+C during training requests a saved stop
+without starting another evaluation. An evaluation failure stops the run with
+the pre-evaluation checkpoint preserved. No automatic promotion or early stopping
+is performed. A background run can use the same `nohup` pattern shown above.
+
+Confidence intervals use a conservative Hoeffding bound over independent deals.
+The paired comparison treats each two-game pair as one observation, not two
+independent samples. At 1,000 deals the half-width is about 4.3 percentage points.
+`better` means the lower bound exceeds the appropriate 50% or 25% baseline.
+These are per-evaluation intervals, not a simultaneous guarantee over repeatedly
+selected checkpoints. Confirm a promising model with more fresh deals and retain
+Smart/greedy regression checks before deployment.
+
+## Recommendation on old-model training opponents
+
+Keep pure all-seat self-play for the first monitored continuation. The old model
+is the frozen evaluation reference. This establishes whether the current method
+actually improves from the warm start.
+
+Then compare a separate 80% current-self-play / 20% historical-opponent run from
+the same starting checkpoint with matched learner-sample and wall-time budgets.
+Including old policies may help avoid forgetting, but a single frozen opponent
+can also encourage narrow exploitation; the ratio is not validated for Big 2.
+Opponent mixing is not implemented in this trainer yet.
+
+If mixing helps and the learner consistently beats v1, reduce its sampling weight
+and add stronger historical snapshots rather than immediately deleting it from
+the pool. Always retain an immutable v1 evaluation reference. Require repeated
+fresh-deal evidence and checks against other styles; do not remove an opponent
+or promote a checkpoint based on a single win-rate spike.
