@@ -25,16 +25,18 @@ Command: `python -m experiments.jax_big2.benchmark --require-gpu --batch-sizes
 | JAX GPU, batch 1,024 | 148,816 | 2,015.8 | 8.13 |
 
 These are random-policy simulation rates, including legal moves, observations
-and ongoing episode resets. Timed device work is synchronized; compilation and
-warmup are excluded. They do not include neural inference or learning. The 12.6x
+and ongoing episode resets. Device work was synchronized, but the original
+benchmark could compile a second specialization inside the timed section (see
+below). Treat these as historical uncorrected measurements and rerun with v2. They do not include neural inference or learning. The 12.6x
 ratio compares a batched GPU with one Python worker, not an optimized parallel
 CPU trainer. Cost efficiency is unmeasured. Raw result JSON remains on the user's
 instance; this table transcribes their supplied output.
 
 The initial 28 tests passed on the GPU in 12.41 seconds. With the policy sweep
 added, 31 tests passed locally on CPU, including 476 independently generated
-PyTorch score fixtures and overflow-action checks. GPU validation of those
-additional tests and best-policy sweep results are pending.
+PyTorch score fixtures and overflow-action checks. The user subsequently supplied GPU results for the best-policy sweep; see the
+timing correction below. GPU validation of the additional policy tests has not
+been reported separately.
 
 ## Configuration sweep
 
@@ -118,3 +120,57 @@ Do not replace the shipped model based on lower loss or raw throughput. Require
 convincing head-to-head improvement and inspect regressions across the suite.
 The original run plateaued around 3.5M games; more simulation alone is not
 evidence that the method will improve further.
+
+
+## Best-policy sweep: timing correction and GPU memory
+
+The first AutoDL policy sweep used 64 steps and three repeats. Every configuration
+had a first timed repeat of 3.6–5.7 seconds, followed by much shorter repeats.
+Local diagnosis reproduced a second JIT compilation: initial trick metadata and
+winner integers were weakly typed, but became strongly typed after a rollout.
+The aggregate throughput ranking therefore included compilation and should not
+be used to pick a configuration. The environment-only benchmark shared this risk.
+
+Benchmark version 2 gives those state fields explicit int32 types and compiles
+an executable before warmup/timing. Repeated calls use that executable directly;
+a signature mismatch raises rather than silently recompiling. A regression test
+checks repeated policy and random rollouts through the same compiled executable.
+
+For orientation only, rates computed from the final two repeats of the supplied
+policy run were:
+
+| Parallel games | Candidate capacity | Approximate decisions/s |
+| --- | ---: | ---: |
+| 64 | 32 | 125,550 |
+| 64 | 64 | 132,543 |
+| 64 | 128 | 103,135 |
+| 256 | 64 | 119,264 |
+| 1024 | 64 | 104,022 |
+
+These are short, post-hoc estimates, not corrected benchmark results. They suggest
+capacity 64 and a smaller batch may outperform batch 1024. Confirm with v2,
+including intermediate batches:
+
+```bash
+JAX_PLATFORMS=cuda python -m experiments.jax_big2.sweep \
+  --batch-sizes 32 64 128 256 512 1024 \
+  --capacities 64 --steps 512 --repeats 5 \
+  --learner-batches --output results/policy-sweep-v2.json
+```
+
+Low GPU memory use is expected. The model has about 716K float32 parameters
+(~2.9 MB), and this sweep does not store rollout trajectories or a replay buffer.
+Available VRAM does not indicate whether compute, kernel dispatch, or memory
+bandwidth limits throughput. Maximize sustained useful decisions/s, leaving room
+for actual training buffers, rather than filling the device for its own sake.
+
+The sweep now reports resident state/parameter bytes and compiler estimates for
+argument, output, temporary and aliased buffers. These estimates are not total
+process/device memory or allocator reservation. Future training memory also
+includes optimizer state, gradients, activations and stored trajectories.
+
+The reported synthetic learner rates were 2.79M–5.58M samples/s, but each timed
+sample lasted only 9–37 ms on synthetic resident data. They suggest rollout
+collection deserves attention first; confirm with longer optimizer runs and an
+integrated trainer before declaring the actual bottleneck. Retain batch 1024 as
+the learning baseline even if larger optimizer batches score better in isolation.

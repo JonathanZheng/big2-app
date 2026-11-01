@@ -28,6 +28,16 @@ def make_rollout(steps, capacity):
     return rollout
 
 
+def executable_memory(compiled):
+    """Compiler buffer estimates, not allocator reservation or total GPU usage."""
+    analysis = compiled.memory_analysis()
+    if analysis is None:
+        return None
+    fields = ('argument_size_in_bytes', 'output_size_in_bytes',
+              'temp_size_in_bytes', 'alias_size_in_bytes')
+    return {name: int(getattr(analysis, name)) for name in fields}
+
+
 def learner_benchmark(params, batch, updates):
     import optax
     # Throughput only: synthetic resident examples, no learning-quality claim.
@@ -47,6 +57,7 @@ def learner_benchmark(params, batch, updates):
             return optax.apply_updates(p, delta), opt, loss
         return jax.lax.fori_loop(0, updates, body, (p, opt, jnp.float32(0)))
     start = time.perf_counter()
+    run = run.lower(params, initial).compile()
     jax.block_until_ready(run(params, initial))
     warmup = time.perf_counter() - start
     start = time.perf_counter()
@@ -57,7 +68,8 @@ def learner_benchmark(params, batch, updates):
         raise RuntimeError('Non-finite learner loss')
     return dict(kind='synthetic_learner', batch=batch, updates=updates,
                 compile_and_warmup_seconds=warmup, seconds=elapsed,
-                samples_per_second=batch * updates / elapsed, final_loss=loss)
+                samples_per_second=batch * updates / elapsed, final_loss=loss,
+                executable_memory=executable_memory(run))
 
 
 def main():
@@ -80,7 +92,7 @@ def main():
         parser.error('GPU required; use --allow-cpu only for local smoke testing')
     jax.config.update('jax_default_matmul_precision', 'highest')
     params = load_weights(args.weights)
-    report = dict(jax=jax.__version__, devices=[str(x) for x in jax.devices()],
+    report = dict(benchmark_version=2, jax=jax.__version__, devices=[str(x) for x in jax.devices()],
                   weights_sha256=hashlib.sha256(Path(args.weights).read_bytes()).hexdigest(),
                   precision='highest', epsilon=.01, seed=42, steps=args.steps,
                   repeats=args.repeats, runs=[])
@@ -99,7 +111,8 @@ def main():
             key = jax.random.PRNGKey(42)
             start = time.perf_counter()
             states = jax.block_until_ready(jax.jit(jax.vmap(env.reset))(jax.random.split(key, batch)))
-            rollout = make_rollout(args.steps, capacity)
+            rollout = make_rollout(args.steps, capacity).lower(states, key, params).compile()
+            # Calling the compiled executable cannot silently retrace during timing.
             warmed = jax.block_until_ready(rollout(states, key, params))
             warmup = time.perf_counter() - start
             states, key = warmed[:2]
@@ -116,6 +129,9 @@ def main():
             decisions = batch * args.steps * args.repeats
             record(dict(kind='fixed_policy_rollout', batch=batch, capacity=capacity,
                         compile_and_warmup_seconds=warmup, repeat_seconds=times,
+                        state_bytes=sum(x.nbytes for x in jax.tree_util.tree_leaves(states)),
+                        parameter_bytes=sum(x.nbytes for x in jax.tree_util.tree_leaves(params)),
+                        executable_memory=executable_memory(rollout),
                         decisions_per_second=decisions / sum(times), games_per_second=int(totals[0]) / sum(times),
                         overflow_fraction=int(totals[1]) / decisions,
                         mean_legal_moves=int(totals[2]) / decisions, max_legal_moves=maximum))

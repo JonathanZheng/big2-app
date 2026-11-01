@@ -73,7 +73,7 @@ def main():
         parser.error("Batch sizes, steps, repeats and baseline seconds must be positive")
     if args.require_gpu and jax.default_backend() != "gpu":
         parser.error(f"GPU required, but active backend is {jax.default_backend()}")
-    report = dict(kind="environment_only_random_policy", jax=jax.__version__,
+    report = dict(benchmark_version=2, kind="environment_only_random_policy", jax=jax.__version__,
                   platform=platform.platform(), devices=[str(d) for d in jax.devices()],
                   seed=args.seed, steps=args.steps, repeats=args.repeats,
                   python=python_baseline(args.baseline_seconds, args.seed), runs=[])
@@ -84,13 +84,14 @@ def main():
         key = jax.random.PRNGKey(args.seed)
         start = time.perf_counter()
         states = jax.block_until_ready(reset_batch(jax.random.split(key, batch)))
-        warmed = jax.block_until_ready(rollout(states, key))
+        compiled = rollout.lower(states, key).compile()
+        warmed = jax.block_until_ready(compiled(states, key))
         compile_seconds = time.perf_counter() - start
         states, key = warmed[:2]
         games = checksum = 0
         start = time.perf_counter()
         for _ in range(args.repeats):
-            states, key, ended, observed = jax.block_until_ready(rollout(states, key))
+            states, key, ended, observed = jax.block_until_ready(compiled(states, key))
             games += int(ended)
             checksum += int(observed)
         elapsed = time.perf_counter() - start

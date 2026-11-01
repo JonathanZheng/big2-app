@@ -47,3 +47,19 @@ def test_nonoverflow_and_exploration_are_legal(params):
         actions, _, _ = jax.jit(lambda p, s: choose_actions(p, s, jax.random.PRNGKey(5), 128, epsilon))(params, states)
         mask = np.asarray(jax.jit(jax.vmap(env.legal_mask))(states))
         assert mask[np.arange(4), np.asarray(actions)].all()
+
+
+def test_rollout_reuses_compiled_executable(params):
+    from experiments.jax_big2.sweep import make_rollout
+    from experiments.jax_big2.benchmark import make_rollout as random_rollout
+    key = jax.random.PRNGKey(8)
+    initial = jax.jit(jax.vmap(env.reset))(jax.random.split(key, 2))
+    for rollout, extra in ((make_rollout(2, 32), (params,)), (random_rollout(2), ())):
+        compiled = rollout.lower(initial, key, *extra).compile()
+        first = jax.block_until_ready(compiled(initial, key, *extra))
+        # Initial and evolved state must have identical abstract types. Otherwise
+        # jit would compile again on the first timed call (or AOT would reject it).
+        for before, after in zip(initial, first[0]):
+            assert (before.shape, before.dtype, before.weak_type) == (after.shape, after.dtype, after.weak_type)
+        second = jax.block_until_ready(compiled(first[0], first[1], *extra))
+        assert second[0].player.shape == (2,)

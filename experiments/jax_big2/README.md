@@ -164,3 +164,14 @@ with an opponent pool or other algorithm changes.
 
 For measured GPU results and the proposed historical-opponent experiment, see
 [the JAX experiment record](../../docs/training/jax-experiments.md).
+
+
+### Benchmark timing correction (version 2)
+
+The first GPU policy sweep exposed a second compilation inside its first timed
+repeat. Initial scalar state types now match evolved state types, and both
+benchmarks use explicitly compiled executables before timing. JSON reports
+`benchmark_version: 2`. Earlier aggregate throughput/rankings need confirmation;
+see the [timing diagnosis and next sweep](../../docs/training/jax-experiments.md#best-policy-sweep-timing-correction-and-gpu-memory).
+The policy sweep also reports state/parameter sizes and compiler buffer estimates,
+not total GPU memory use. It does not retain training trajectories.

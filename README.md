@@ -99,7 +99,9 @@ the sweep requires `--allow-cpu` for local smoke checks.
 
 The first GPU environment-only test reached about **148,816 decisions/s** at
 1,024 parallel games, versus 11,807 for one Python worker on the same cloud host.
-This is **12.6x simulation throughput**, not a measured training speedup.
+That original run reported **12.6x simulation throughput**, not training speedup.
+A subsequent sweep exposed compilation inside the timed section; benchmark v2
+fixes this, and the original rates need confirmation.
 See the [JAX experiment record and proposed training setup](docs/training/jax-experiments.md)
 for results, limitations and next steps.
 

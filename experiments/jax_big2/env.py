@@ -70,10 +70,10 @@ def from_deal(deal):
     types, values = jax.vmap(classify)(deal)
     return State(deal, jnp.full(4, 8191, jnp.int32), types, values,
                  jnp.argmin(jnp.min(deal, axis=1)).astype(jnp.int32),
-                 jnp.array(True), jnp.array(0), jnp.array(-1),
-                 jnp.zeros(52, bool), jnp.array(0), jnp.array(0),
+                 jnp.array(True), jnp.int32(0), jnp.int32(-1),
+                 jnp.zeros(52, bool), jnp.int32(0), jnp.int32(0),
                  jnp.zeros((4, 52), bool), jnp.zeros((4, 52), bool),
-                 jnp.array(False), jnp.array(-1))
+                 jnp.array(False), jnp.int32(-1))
 
 
 def reset(key):
