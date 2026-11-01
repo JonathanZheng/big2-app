@@ -4,6 +4,9 @@ Status as of 2026-11-01: the environment, configuration sweep and experimental
 end-to-end JAX trainer are implemented. Historical-opponent mixing is not.
 The current shipped model remains the PyTorch-trained `selfplay_v1`.
 
+The detailed [sweep results and verdict](jax-sweep-results.md) include both policy
+sweeps, the timing correction, memory estimates and synthetic optimizer results.
+
 ## Measured environment throughput
 
 The user ran the benchmark on AutoDL and supplied the terminal output. Hardware

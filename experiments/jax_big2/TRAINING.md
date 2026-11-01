@@ -4,7 +4,8 @@ The first end-to-end trainer uses all-seat self-play initialized from the shippe
 `selfplay_v1.npz` weights. Default settings follow the corrected AutoDL sweep:
 64 games per round, candidate capacity 64, float32/highest precision, Adam at
 3e-4, batch 1024, gradient clipping at 1.0 and 1% exploration. Historical-opponent
-mixing remains a separate future experiment.
+mixing remains a separate future experiment. The [sweep results and verdict](../../docs/training/jax-sweep-results.md)
+document the measured rollout configuration choice and its limits.
 
 ## AutoDL start and resume
 

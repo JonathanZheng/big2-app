@@ -103,7 +103,8 @@ JAX_PLATFORMS=cuda python -m experiments.jax_big2.train \
 ```
 
 Defaults are 64 parallel games, candidate capacity 64, optimizer batch 1024 and
-learning rate 3e-4. See the [training guide](experiments/jax_big2/TRAINING.md) for
+learning rate 3e-4. The [sweep results and verdict](docs/training/jax-sweep-results.md)
+record why we chose these settings, including the timing fix and memory findings. See the [training guide](experiments/jax_big2/TRAINING.md) for
 resume, background runs and export/evaluation. Integrated GPU training performance
 and learning quality still need validation.
 

@@ -111,6 +111,9 @@ algorithm experiments cheaper, but does not itself promise better playing streng
 
 ## Best-model configuration sweep
 
+Measured AutoDL runs and the configuration decision are recorded in
+[the sweep results and verdict](../../docs/training/jax-sweep-results.md).
+
 Export locally where PyTorch and the shipped checkpoint are available:
 
 ```bash
