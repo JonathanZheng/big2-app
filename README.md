@@ -182,6 +182,25 @@ score against one opponent alone is not enough to establish general improvement.
 - **Network:** 3 hidden layers (512, 512, 256) that output one score per candidate move.
 - **Training:** all 4 seats are played by the current model. After each game, every decision is labelled with that player's result: the winner gets 0.8 to 1.0, and losers get -0.8 to -1.0 depending on cards left. The network learns to predict this. It plays a random move 1% of the time.
 
+## Contributions to XERJ's Corpus Hub
+
+XERJ selected our
+[JAX checkpoint evaluation implementation](https://github.com/JonathanZheng/big2-app/commit/e8a23530c42dc2f9f46bb33ffa287a2d92dffbf9)
+for proposed inclusion in its public Corpus Hub. [XERJ](https://github.com/xerj-org/xerj)
+is an open-source search engine for AI agents; the hub makes existing code
+solutions available as worked references for other developers and their agents.
+
+The selected work evaluates training checkpoints against a frozen reference
+model, helping distinguish playing-strength improvements from training
+throughput. It includes periodic evaluation, JAX-to-PyTorch checkpoint export,
+paired head-to-head games, confidence bounds, and tests. See the
+[evaluation code](experiments/jax_big2/evaluate.py) and
+[training guide](experiments/jax_big2/TRAINING.md#training-with-periodic-evaluation-against-selfplay_v1)
+for the implementation and its limitations.
+
+The proposed inclusion is under this repository's MIT license, with attribution
+to Jonathan Zheng and `JonathanZheng/big2-app`.
+
 ## References
 
 - Patwa 2026, *Self-Play Reinforcement Learning under Imperfect Information in Big 2* (arXiv 2605.28863): the Smart bot, and the reference results quoted above.
