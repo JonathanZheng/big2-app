@@ -1,8 +1,8 @@
 // Offline support: keeps the app pages, scripts and the model so bots and
 // Best move work without a connection. Bump CACHE to drop old files.
-const CACHE = "big2-v1";
+const CACHE = "big2-v2";
 const PAGES = ["/", "/play", "/friends", "/best-move", "/rules", "/profile"];
-const MODEL = ["/model/selfplay_v1.json", "/model/selfplay_v1.bin"];
+const MODEL = ["/model/selfplay_v2.json", "/model/selfplay_v2.bin"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

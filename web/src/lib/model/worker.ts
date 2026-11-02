@@ -12,11 +12,11 @@ export type WorkerResponse =
 
 const network: Promise<Network> = (async () => {
   const [manifest, weights] = await Promise.all([
-    fetch("/model/selfplay_v1.json").then((r) => {
+    fetch("/model/selfplay_v2.json").then((r) => {
       if (!r.ok) throw new Error(`Model manifest: HTTP ${r.status}`);
       return r.json() as Promise<WeightsManifest>;
     }),
-    fetch("/model/selfplay_v1.bin").then((r) => {
+    fetch("/model/selfplay_v2.bin").then((r) => {
       if (!r.ok) throw new Error(`Model weights: HTTP ${r.status}`);
       return r.arrayBuffer();
     }),

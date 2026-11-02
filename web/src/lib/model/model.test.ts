@@ -10,8 +10,8 @@ const positions = fixtures as Fixture[];
 const modelDir = path.resolve(__dirname, "../../../public/model");
 
 function loadNetwork(): Network {
-  const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v1.json"), "utf8")) as WeightsManifest;
-  const bytes = readFileSync(path.join(modelDir, "selfplay_v1.bin"));
+  const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
+  const bytes = readFileSync(path.join(modelDir, "selfplay_v2.bin"));
   return Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
@@ -38,8 +38,8 @@ describe("Network", () => {
   });
 
   it("rejects empty, truncated and non-float32 weights instead of scoring with them", () => {
-    const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v1.json"), "utf8")) as WeightsManifest;
-    const bytes = readFileSync(path.join(modelDir, "selfplay_v1.bin"));
+    const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
+    const bytes = readFileSync(path.join(modelDir, "selfplay_v2.bin"));
     const exact = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     expect(() => Network.fromBuffers(manifest, new ArrayBuffer(0))).toThrow("empty");
     expect(() => Network.fromBuffers(manifest, exact.slice(0, 1000))).toThrow("outside");

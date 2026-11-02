@@ -3,7 +3,7 @@
 Agents:
     smart         Smart heuristic bot (Patwa 2026)
     greedy        Greedy bot
-    best          models/selfplay_v1.pt, the current best model
+    best          models/selfplay_v2.pt, the current best model
     <path>.pt     A self-play checkpoint
 
 Examples:
@@ -23,7 +23,7 @@ from big2_ai.agents import select_action_greedy_bot, select_action_smart_bot
 from big2_ai.models.selfplay_network import SelfPlayNetwork
 from big2_ai.training.selfplay import choose_move
 
-BEST_MODEL_PATH = "models/selfplay_v1.pt"
+BEST_MODEL_PATH = "models/selfplay_v2.pt"
 
 _agents = {}
 

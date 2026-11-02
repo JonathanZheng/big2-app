@@ -8,6 +8,7 @@ options. One puzzle per game, so puzzles do not repeat a deal.
 Run from the repo root: python3 scripts/export_puzzles.py
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -66,9 +67,27 @@ def puzzle_from(game, model):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--rescore', action='store_true', help='Keep existing positions and update their best moves')
+    args = parser.parse_args()
+    torch.set_num_threads(1)
     model = SelfPlayNetwork()
-    model.load_state_dict(torch.load("models/selfplay_v1.pt", map_location="cpu")["model_state_dict"])
+    model.load_state_dict(torch.load("models/selfplay_v2.pt", map_location="cpu")["model_state_dict"])
     model.eval()
+    if args.rescore:
+        puzzles = json.loads(OUT.read_text())
+        for p in puzzles:
+            game = Big2Game()
+            game.hands = p['hands']
+            game.current_player = p['current']
+            game.first_move = p['firstMove']
+            game.last_move = None if p['lastPlay'] is None else Move(p['lastPlay']['cards'], p['lastPlay']['player'])
+            game.passes_since_last_move = p['passes']
+            game.move_history = [Move(m['cards'], m['player']) for m in p['history']]
+            p['best'] = sorted(choose_move(model, game, game.current_player)[0].cards)
+        OUT.write_text(json.dumps(puzzles, separators=(",", ":")))
+        print(f'Rescored {len(puzzles)} existing puzzle positions with selfplay_v2')
+        return
     puzzles = []
     seed = 50_000
     while len(puzzles) < COUNT:

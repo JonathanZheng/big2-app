@@ -14,8 +14,8 @@ export function serverModel() {
   loading ??= (async () => {
     const dir = path.join(process.cwd(), "public", "model");
     const [manifest, bytes] = await Promise.all([
-      readFile(path.join(dir, "selfplay_v1.json"), "utf8").then((t) => JSON.parse(t) as WeightsManifest),
-      readFile(path.join(dir, "selfplay_v1.bin")),
+      readFile(path.join(dir, "selfplay_v2.json"), "utf8").then((t) => JSON.parse(t) as WeightsManifest),
+      readFile(path.join(dir, "selfplay_v2.bin")),
     ]);
     const net = Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     return {

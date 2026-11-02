@@ -21,8 +21,8 @@ describe("puzzles.json", () => {
   });
 
   it("gets the same best move from the browser model as from Python", () => {
-    const manifest = JSON.parse(readFileSync(path.join(publicDir, "model/selfplay_v1.json"), "utf8")) as WeightsManifest;
-    const bytes = readFileSync(path.join(publicDir, "model/selfplay_v1.bin"));
+    const manifest = JSON.parse(readFileSync(path.join(publicDir, "model/selfplay_v2.json"), "utf8")) as WeightsManifest;
+    const bytes = readFileSync(path.join(publicDir, "model/selfplay_v2.bin"));
     const net = Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     for (const p of puzzles) {
       const state = puzzleState(p);

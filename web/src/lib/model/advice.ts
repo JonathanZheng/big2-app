@@ -4,7 +4,7 @@
  */
 import type { Card } from "@/lib/engine/cards";
 
-/** (score, chance the player wins) measured on 600 self-play games. */
+/** (score, chance the player wins) measured on 600 v1 self-play games; retained for v2 pending recalibration. */
 const CALIBRATION: [number, number][] = [
   [-1.0, 0.013], [-0.7, 0.092], [-0.5, 0.188], [-0.3, 0.304], [-0.1, 0.435],
   [0.1, 0.542], [0.3, 0.614], [0.5, 0.792], [0.8, 0.952],

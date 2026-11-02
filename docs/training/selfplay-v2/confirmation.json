@@ -1,0 +1,29 @@
+{
+  "paired_2v2": {
+    "win_rate": 0.5297,
+    "ci95": [
+      0.5161189848425938,
+      0.5432810151574061
+    ],
+    "independent_deals": 10000,
+    "baseline": 0.5,
+    "verdict": "better"
+  },
+  "solo_1v3": {
+    "win_rate": 0.2716,
+    "ci95": [
+      0.25801898484259383,
+      0.2851810151574062
+    ],
+    "independent_deals": 10000,
+    "baseline": 0.25,
+    "verdict": "better"
+  },
+  "interval_method": "Hoeffding, per evaluation; paired games grouped by deal",
+  "training_games": 10072256,
+  "checkpoint": "checkpoints/jax-full/model_10072256.npz",
+  "reference": "models/selfplay_v1.pt",
+  "reference_sha256": "e635fc692081abfc348129a079133db20b56a094489a86406e7438003802212d",
+  "seed_start": 700000000,
+  "evaluation_seconds": 265.94913350000206
+}
