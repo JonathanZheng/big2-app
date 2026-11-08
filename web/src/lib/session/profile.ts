@@ -1,7 +1,9 @@
 /**
- * Per-game records behind the profile page, kept in this browser. Only vs
- * bots games are recorded; one-device games are shared and do not count.
+ * Per-game records behind the profile page, kept in this browser or, when
+ * signed in, on the account. Only vs bots games are recorded; one-device
+ * games are shared and do not count.
  */
+import { queueChange, readAccount } from "@/lib/account/store";
 import type { Difficulty } from "@/lib/bots/bots";
 import { suit } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
@@ -98,6 +100,11 @@ export function summarise(records: GameRecord[]): Profile {
 }
 
 export function readGameRecords(): GameRecord[] {
+  return readAccount()?.history.games ?? readGuestGameRecords();
+}
+
+/** Games kept in this browser while signed out. */
+export function readGuestGameRecords(): GameRecord[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
     return Array.isArray(parsed) ? (parsed as GameRecord[]) : [];
@@ -107,8 +114,9 @@ export function readGameRecords(): GameRecord[] {
 }
 
 export function saveGameRecord(record: GameRecord) {
+  if (queueChange({ games: [record] })) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify([...readGameRecords(), record].slice(-KEEP)));
+    localStorage.setItem(KEY, JSON.stringify([...readGuestGameRecords(), record].slice(-KEEP)));
   } catch {
     // Storage blocked: the profile simply is not kept.
   }
@@ -116,8 +124,14 @@ export function saveGameRecord(record: GameRecord) {
 
 /** Add the analysis of a saved game, found by when it ended. */
 export function attachAnalysis(at: number, analysis: GameAnalysis) {
+  const account = readAccount();
+  if (account) {
+    const record = account.history.games.find((r) => r.at === at);
+    if (record) queueChange({ games: [{ ...record, analysis }] });
+    return;
+  }
   try {
-    const records = readGameRecords();
+    const records = readGuestGameRecords();
     if (!records.some((r) => r.at === at)) return;
     localStorage.setItem(KEY, JSON.stringify(records.map((r) => (r.at === at ? { ...r, analysis } : r))));
   } catch {
@@ -125,7 +139,7 @@ export function attachAnalysis(at: number, analysis: GameAnalysis) {
   }
 }
 
-/** Remove every stat this browser keeps. */
+/** Remove every stat this browser keeps while signed out. */
 export function clearProfile() {
   try {
     localStorage.removeItem(KEY);
