@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import { AccountSync } from "@/components/account-sync";
 import { ServiceWorker } from "@/components/service-worker";
 import { SiteHeader } from "@/components/site-header";
 import { ACCENT_BOOT_SCRIPT } from "@/lib/theme";
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <ServiceWorker />
+        <AccountSync />
         <SiteHeader />
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-10 py-8">
           {children}

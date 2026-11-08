@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SignIn, useAccount } from "@/components/account-panel";
+import { signOutAccount } from "@/lib/account/sync";
 import { onlineClient } from "@/lib/online/client";
 
 const button = "border-3 border-ink font-extrabold";
@@ -29,7 +30,7 @@ export function AccountSection() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="font-mono text-sm">SIGNED IN AS <strong>{account.name.toUpperCase()}</strong> ({account.session.user.email})</p>
-        <button type="button" onClick={() => void supabase.auth.signOut().then(refresh)} className={`${button} px-3 py-2 bg-card shadow-brutal-sm text-xs`}>SIGN OUT</button>
+        <button type="button" onClick={() => void signOutAccount().then(refresh)} className={`${button} px-3 py-2 bg-card shadow-brutal-sm text-xs`}>SIGN OUT</button>
       </div>
       {stats && (
         <p className="font-mono text-sm">

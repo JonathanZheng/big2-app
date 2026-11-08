@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { AccentPicker } from "@/components/accent-picker";
 import { AccountSection } from "@/components/account-section";
 import { ReviewPanel } from "@/components/review-panel";
+import { readAccount, subscribeHistory } from "@/lib/account/store";
+import { resetAccountHistory } from "@/lib/account/sync";
 import { SUIT_SYMBOLS } from "@/lib/engine/cards";
 import { MoveType } from "@/lib/engine/moves";
 import { ModelClient } from "@/lib/model/client";
@@ -31,16 +33,14 @@ const SLIPS: Record<SlipKind, string> = {
 };
 const button = "border-3 border-ink font-extrabold";
 
-// Read straight from storage on every render; the server has no stats.
-const subscribe = (onChange: () => void) => {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-};
-const snapshot = () => JSON.stringify([readGameRecords(), readStats(), readSavedReviews()]);
+// Read straight from storage on every render: this browser's stats, or the signed-in account's copy.
+const subscribe = subscribeHistory;
+const snapshot = () => JSON.stringify([readGameRecords(), readStats(), readSavedReviews(), readAccount() !== null]);
 
 export function ProfileScreen() {
   const [, setVersion] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const [open, setOpen] = useState<SavedReview | null>(null);
   // The model only loads when a saved review is opened.
   const client = useRef<ModelClient | null>(null);
@@ -52,27 +52,47 @@ export function ProfileScreen() {
   const raw = useSyncExternalStore(subscribe, snapshot, () => null);
   const data = useMemo(() => {
     if (raw === null) return null;
-    const [records, stats, reviews] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>, SavedReview[]];
+    const [records, stats, reviews, signedIn] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>, SavedReview[], boolean];
     const play = summariseAnalyses(records.flatMap((r) => (r.analysis ? [r.analysis] : [])));
-    return { profile: summarise(records), stats, reviews, play };
+    return { profile: summarise(records), stats, reviews, play, signedIn };
   }, [raw]);
 
   if (!data) return <p className="font-mono text-sm">LOADING STATS...</p>;
-  const { profile: p, stats, reviews, play } = data;
+  const { profile: p, stats, reviews, play, signedIn } = data;
+
+  async function reset() {
+    setResetError(null);
+    if (!signedIn) clearProfile();
+    else {
+      try {
+        await resetAccountHistory();
+      } catch (error) {
+        setResetError(error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
+    setConfirmReset(false);
+    setVersion((v) => v + 1);
+  }
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-5xl font-black tracking-tight leading-none">PROFILE</h1>
-          <p className="font-mono text-xs">STATS FROM YOUR VS BOTS GAMES, KEPT IN THIS BROWSER.</p>
+          <p className="font-mono text-xs">
+            {signedIn ? "STATS FROM YOUR VS BOTS GAMES, SAVED TO YOUR ACCOUNT." : "STATS FROM YOUR VS BOTS GAMES, KEPT IN THIS BROWSER."}
+          </p>
         </div>
         {p.games > 0 && (confirmReset ? (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-xs">DELETE EVERY STAT IN THIS BROWSER?</span>
+            <span className="font-mono text-xs">
+              {signedIn ? "DELETE EVERY VS BOTS STAT ON YOUR ACCOUNT, ON EVERY DEVICE?" : "DELETE EVERY STAT IN THIS BROWSER?"}
+            </span>
             <button type="button" onClick={() => setConfirmReset(false)} className={`${button} px-3 py-2 bg-card`}>KEEP</button>
             <button type="button" className={`${button} px-3 py-2 bg-accent`}
-              onClick={() => { clearProfile(); setConfirmReset(false); setVersion((v) => v + 1); }}>DELETE</button>
+              onClick={() => void reset()}>DELETE</button>
+            {resetError && <span className="font-mono text-xs">{resetError}</span>}
           </div>
         ) : (
           <button type="button" onClick={() => setConfirmReset(true)} className={`${button} px-3 py-2 bg-card font-mono text-xs`}>
