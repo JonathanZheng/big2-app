@@ -40,9 +40,9 @@ The owner wants the account to be the home for a player's history. Sign in on an
 
 ## Behaviour
 
-**Signing in.** After sign-in succeeds (and the display name is set, for a new account), the browser sends its guest data to the account. Only after the account confirms it has stored everything does the browser clear those guest keys. If the upload fails, the guest data stays and the upload is retried on the next page load while signed in. The merge rules above make a repeat upload harmless.
+**Signing in.** After sign-in succeeds, the browser sends its guest data to the account. Only after the account confirms it has stored everything does the browser clear those guest keys. If the upload fails, the guest data stays and the upload is retried on the next page load while signed in. The merge rules above make a repeat upload harmless.
 
-**What starts an upload.** The trigger is simply "signed in, and the browser holds guest data", checked after sign-in and on every page load. This one rule covers three cases: a fresh sign-in, a retry after a failed upload, and browsers that are already signed in when this ships. Those browsers hold history from before the feature existed, and on their first load after the update that history is uploaded into the signed-in account and then cleared. If an upload fails and the player signs out before a retry succeeds, the data is still guest data and goes to whoever signs in next on that browser.
+**What starts an upload.** The trigger is simply "signed in, and the browser holds guest data", checked after sign-in and on every page load. This one rule covers three cases: a fresh sign-in, a retry after a failed upload, and browsers that are already signed in when this ships. Those browsers hold history from before the feature existed, and on their first load after the update that history is uploaded into the signed-in account and then cleared. At that moment the guest data is handed to the signed-in account: it leaves the guest keys and waits in that account's own upload queue. If the upload fails and the player signs out before a retry succeeds, it stays queued for that account and is sent the next time that account is signed in and online. It never goes to a different account.
 
 **Signed in.** Screens read the account's data. Each finished game, analysis, match result, saved review, deletion and puzzle answer is written to the account. If the write cannot reach the account (offline, network error), it is held in the browser and sent when the connection returns. Held items are tied to the account they were made under; if a different account signs in first, they are not sent to it.
 
@@ -78,7 +78,7 @@ The owner wants the account to be the home for a player's history. Sign in on an
 - For a puzzle answered on both sides, the better label wins.
 - Writes made while offline are held and sent later, tied to the account that made them.
 - RESET STATS is a plain delete of what the account holds, needs a connection, and does not block older games that arrive later.
-- Guest data whose upload failed before sign-out stays guest data and goes to the next sign-in on that browser.
+- Guest data is handed to the signed-in account the moment it is picked up, so an upload that fails before sign-out waits for that same account, never the next one.
 
 ## Left to the builder
 
