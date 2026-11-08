@@ -1,7 +1,9 @@
 /**
  * Daily puzzles: positions from the bot's own games where one move is clearly
- * best (made by scripts/export_puzzles.py). Results stay in this browser.
+ * best (made by scripts/export_puzzles.py). Results stay in this browser or,
+ * when signed in, on the account.
  */
+import { queueChange, readAccount } from "@/lib/account/store";
 import type { Card } from "@/lib/engine/cards";
 import type { GameState, Play } from "@/lib/engine/game";
 import type { Label } from "@/lib/model/advice";
@@ -51,6 +53,11 @@ export function puzzleFor(date: Date, count: number): number {
 }
 
 export function readResults(): Record<string, PuzzleResult> {
+  return readAccount()?.history.puzzles ?? readGuestResults();
+}
+
+/** Results kept in this browser while signed out. */
+export function readGuestResults(): Record<string, PuzzleResult> {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}");
     return parsed && typeof parsed === "object" ? (parsed as Record<string, PuzzleResult>) : {};
@@ -60,10 +67,19 @@ export function readResults(): Record<string, PuzzleResult> {
 }
 
 export function saveResult(day: string, result: PuzzleResult) {
+  if (queueChange({ puzzles: { [day]: result } })) return;
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...readResults(), [day]: result }));
+    localStorage.setItem(KEY, JSON.stringify({ ...readGuestResults(), [day]: result }));
   } catch {
     // Storage blocked: the result is shown but not kept.
+  }
+}
+
+export function clearGuestResults() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Storage blocked: nothing to clear.
   }
 }
 

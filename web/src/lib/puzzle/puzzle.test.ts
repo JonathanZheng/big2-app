@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "@/lib/model/encoding";
 import { Network, type WeightsManifest } from "@/lib/model/network";
-import { type Puzzle, dayKey, puzzleFor, puzzleState, readResults, saveResult, streak } from "./puzzle";
+import { readQueue } from "@/lib/account/store";
+import { signedIn } from "@/lib/account/test-helpers";
+import { type Puzzle, dayKey, puzzleFor, puzzleState, readGuestResults, readResults, saveResult, streak } from "./puzzle";
 
 const publicDir = path.resolve(__dirname, "../../../public");
 const puzzles = JSON.parse(readFileSync(path.join(publicDir, "puzzles.json"), "utf8")) as Puzzle[];
@@ -62,5 +64,17 @@ describe("results and streak", () => {
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); } });
     expect(readResults()).toEqual({});
     expect(() => saveResult("2026-10-31", { cards: [], label: "Best" })).not.toThrow();
+  });
+});
+
+describe("signed in", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("saves puzzle results to the account", () => {
+    signedIn();
+    saveResult("2026-11-01", { cards: [1], label: "Good" });
+    expect(readResults()["2026-11-01"].label).toBe("Good");
+    expect(readGuestResults()).toEqual({});
+    expect(readQueue("a")?.puzzles["2026-11-01"].label).toBe("Good");
   });
 });

@@ -11,6 +11,7 @@ import { legalMoves } from "@/lib/engine/legal";
 import { sortHand } from "@/lib/hand/sort";
 import { type Label, evaluation, rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
+import { subscribeHistory } from "@/lib/account/store";
 import {
   type Puzzle, type PuzzleResult, dayKey, puzzleFor, puzzleState, readResults, saveResult, streak,
 } from "@/lib/puzzle/puzzle";
@@ -28,11 +29,8 @@ const VERDICT: Record<Label, string> = {
   Blunder: "MISSED IT. A BLUNDER.",
 };
 
-// Results live in localStorage; read them on every render on the client.
-const subscribe = (onChange: () => void) => {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-};
+// Results live in localStorage (this browser's, or the account copy); read them on every render on the client.
+const subscribe = subscribeHistory;
 
 export function PuzzleScreen() {
   const [puzzles, setPuzzles] = useState<Puzzle[] | null>(null);

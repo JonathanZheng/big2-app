@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCards } from "@/lib/engine/cards";
 import type { GameState, Play } from "@/lib/engine/game";
 import { MoveType } from "@/lib/engine/moves";
-import { type GameRecord, attachAnalysis, clearProfile, gameRecord, readGameRecords, saveGameRecord, summarise } from "./profile";
+import { readQueue } from "@/lib/account/store";
+import { signedIn } from "@/lib/account/test-helpers";
+import type { GameAnalysis } from "./analysis";
+import {
+  type GameRecord, attachAnalysis, clearProfile, gameRecord, readGameRecords, readGuestGameRecords, saveGameRecord, summarise,
+} from "./profile";
 
 const play = (player: number, cards: string): Play => ({ player, cards: cards ? parseCards(cards) : [] });
 
@@ -117,5 +122,27 @@ describe("storage", () => {
     expect(readGameRecords()).toEqual([]);
     expect(() => saveGameRecord(record(true))).not.toThrow();
     expect(() => clearProfile()).not.toThrow();
+  });
+});
+
+describe("signed in", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const record = (at: number): GameRecord => ({ at, difficulty: "easy", won: true, cardsLeft: 0, plays: [], suits: [0, 0, 0, 0], hints: 0 });
+  const analysis = { moves: 4, best: 3 } as GameAnalysis;
+
+  it("saves games to the account, not the browser", () => {
+    signedIn();
+    saveGameRecord(record(1));
+    expect(readGameRecords().map((r) => r.at)).toEqual([1]);
+    expect(readGuestGameRecords()).toEqual([]);
+    expect(readQueue("a")?.games.map((r) => r.at)).toEqual([1]);
+  });
+
+  it("attaches analysis to the account copy", () => {
+    signedIn();
+    saveGameRecord(record(1));
+    attachAnalysis(1, analysis);
+    expect(readGameRecords()[0].analysis).toEqual(analysis);
+    expect(readQueue("a")?.games[0].analysis).toEqual(analysis);
   });
 });

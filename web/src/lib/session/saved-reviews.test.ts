@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GameState } from "@/lib/engine/game";
-import { type SavedReview, deleteSavedReview, readSavedReviews, saveReview } from "./saved-reviews";
+import { readQueue } from "@/lib/account/store";
+import { signedIn } from "@/lib/account/test-helpers";
+import { type SavedReview, deleteSavedReview, readGuestReviews, readSavedReviews, saveReview } from "./saved-reviews";
 
 const game: GameState = {
   hands: [[], [5], [6, 7], [8]], current: 1, firstMove: false, lastPlay: null, passes: 0,
@@ -47,5 +49,17 @@ describe("saved reviews", () => {
     expect(readSavedReviews()).toEqual([]);
     expect(saveReview(review(1))).toBe(false);
     expect(() => deleteSavedReview("1")).not.toThrow();
+  });
+});
+
+describe("signed in", () => {
+  it("saves and deletes reviews on the account", () => {
+    signedIn();
+    expect(saveReview(review(1))).toBe(true);
+    expect(readSavedReviews().map((r) => r.id)).toEqual(["1"]);
+    expect(readGuestReviews()).toEqual([]);
+    deleteSavedReview("1");
+    expect(readSavedReviews()).toEqual([]);
+    expect(readQueue("a")?.deletedReviews).toEqual(["1"]);
   });
 });

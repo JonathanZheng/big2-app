@@ -1,4 +1,9 @@
-/** Win counts kept in this browser. Storage can be blocked, so every access is guarded. */
+/**
+ * Win counts kept in this browser or, for matches, on the signed-in account.
+ * Storage can be blocked, so every access is guarded.
+ */
+import { queueChange, readAccount } from "@/lib/account/store";
+
 const KEY = "big2.stats.v1";
 
 export interface Stats {
@@ -11,6 +16,14 @@ export interface Stats {
 const EMPTY: Stats = { games: 0, wins: 0, matches: 0, matchWins: 0 };
 
 export function readStats(): Stats {
+  const history = readAccount()?.history;
+  if (!history) return readGuestStats();
+  const wins = history.games.filter((g) => g.won).length;
+  return { games: history.games.length, wins, matches: history.matches, matchWins: history.matchWins };
+}
+
+/** Counts kept in this browser while signed out. */
+export function readGuestStats(): Stats {
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? { ...EMPTY, ...(JSON.parse(raw) as Partial<Stats>) } : { ...EMPTY };
@@ -20,7 +33,7 @@ export function readStats(): Stats {
 }
 
 function update(change: (stats: Stats) => void) {
-  const stats = readStats();
+  const stats = readGuestStats();
   change(stats);
   try {
     localStorage.setItem(KEY, JSON.stringify(stats));
@@ -31,6 +44,7 @@ function update(change: (stats: Stats) => void) {
 
 /** Record a finished game, won or lost. */
 export function recordGame(won: boolean) {
+  if (readAccount()) return; // signed in, games are counted from the account's game records
   update((stats) => {
     stats.games += 1;
     if (won) stats.wins += 1;
@@ -39,6 +53,7 @@ export function recordGame(won: boolean) {
 
 /** Record a multi-game match, including one finished early. */
 export function recordMatch(won: boolean) {
+  if (queueChange({ matches: [{ id: crypto.randomUUID(), matches: 1, matchWins: won ? 1 : 0 }] })) return;
   update((stats) => {
     stats.matches += 1;
     if (won) stats.matchWins += 1;

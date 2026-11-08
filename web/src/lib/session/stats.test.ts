@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readStats, recordGame, recordMatch } from "./stats";
+import { readQueue } from "@/lib/account/store";
+import { signedIn } from "@/lib/account/test-helpers";
+import { readGuestStats, readStats, recordGame, recordMatch } from "./stats";
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -30,5 +32,16 @@ describe("stats", () => {
     expect(() => recordGame(true)).not.toThrow();
     expect(() => recordMatch(true)).not.toThrow();
     expect(readStats()).toEqual({ games: 0, wins: 0, matches: 0, matchWins: 0 });
+  });
+});
+
+describe("signed in", () => {
+  it("records matches to the account", () => {
+    signedIn();
+    recordMatch(true);
+    recordGame(true);
+    expect(readStats()).toMatchObject({ matches: 1, matchWins: 1 });
+    expect(readGuestStats()).toEqual({ games: 0, wins: 0, matches: 0, matchWins: 0 });
+    expect(readQueue("a")?.matches).toHaveLength(1);
   });
 });
