@@ -7,8 +7,8 @@ import { callOnline, onlineClient } from "@/lib/online/client";
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 const input = "border-3 border-ink bg-card px-3 py-2 font-mono text-base min-h-11";
 
-/** New accounts are paused for now; existing accounts can still sign in. Set to false to open sign-ups again. */
-const SIGN_UPS_PAUSED = true;
+/** Set to true to pause new accounts; existing accounts can still sign in. */
+const SIGN_UPS_PAUSED = false;
 
 export interface Account {
   session: Session;
