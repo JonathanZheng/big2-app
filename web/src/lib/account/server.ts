@@ -17,18 +17,19 @@ async function check<T>(query: PromiseLike<{ data: T; error: { message: string }
 
 export async function loadHistory(userId: string): Promise<AccountHistory> {
   const db = admin();
-  const [games, reviews, puzzles, matches] = await Promise.all([
+  const [games, reviews, puzzles, totals] = await Promise.all([
     check(db.from("history_games").select("record").eq("user_id", userId).order("at")),
     check(db.from("history_reviews").select("review").eq("user_id", userId).order("at", { ascending: false })),
     check(db.from("history_puzzles").select("day, result").eq("user_id", userId)),
-    check(db.from("history_matches").select("matches, match_wins").eq("user_id", userId)),
+    check(db.rpc("history_match_totals", { p_user: userId }).single()),
   ]);
   return {
     games: (games as { record: GameRecord }[]).map((g) => g.record),
     reviews: (reviews as { review: SavedReview }[]).map((r) => r.review),
     puzzles: Object.fromEntries((puzzles as { day: string; result: PuzzleResult }[]).map((p) => [p.day, p.result])),
-    matches: (matches as { matches: number }[]).reduce((n, m) => n + m.matches, 0),
-    matchWins: (matches as { match_wins: number }[]).reduce((n, m) => n + m.match_wins, 0),
+    // Sums come back as bigint, which arrives as a number or a string.
+    matches: Number((totals as { matches: number | string }).matches),
+    matchWins: Number((totals as { match_wins: number | string }).match_wins),
   };
 }
 

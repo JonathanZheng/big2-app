@@ -98,6 +98,18 @@ describe.skipIf(!APP)("account history", () => {
     expect(error !== null || (data ?? []).length === 0).toBe(true);
   });
 
+  it("counts every match upload past the 1000 rows one read returns", async () => {
+    const p = await player("totals");
+    for (let part = 0; part < 3; part++) {
+      const matches = Array.from({ length: 400 }, (_, i) => ({ id: `m${part}-${i}`, matches: 1, matchWins: i % 2 }));
+      expect((await call(p.token, { action: "merge", bundle: { matches } })).status).toBe(200);
+    }
+    const { body } = await call(p.token, { action: "load" });
+    expect([body.history.matches, body.history.matchWins]).toEqual([1200, 600]);
+    const direct = await p.db.rpc("history_match_totals", { p_user: "00000000-0000-0000-0000-000000000000" });
+    expect(direct.error?.code).toBe("42501");
+  });
+
   it("signed-in and signed-out visitors have no grants on the tables", async () => {
     const p = await player("grants");
     const anon = createClient(URL, PUBLISHABLE, { auth: { persistSession: false } });
