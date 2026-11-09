@@ -67,7 +67,7 @@ export function readGuestResults(): Record<string, PuzzleResult> {
 }
 
 export function saveResult(day: string, result: PuzzleResult) {
-  if (queueChange({ puzzles: { [day]: result } })) return;
+  if (queueChange({ puzzles: { [day]: result } }) !== null) return;
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...readGuestResults(), [day]: result }));
   } catch {

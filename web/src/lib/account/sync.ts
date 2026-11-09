@@ -2,10 +2,22 @@
  * Browser side of account history: hands guest data to the account on
  * sign-in, sends queued changes, and keeps the account copy current.
  */
+import type { AuthChangeEvent } from "@supabase/supabase-js";
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
-import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory } from "./merge";
-import { addToQueue, finishInflight, readAccount, readQueue, takeQueue, writeAccount } from "./store";
+import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
+import { sendable } from "./validate";
+import { addToQueue, finishInflight, readAccount, readPending, readQueue, takeQueue, writeAccount } from "./store";
+
+/** A request /api/history answered with an error status. */
+class HistoryError extends OnlineError {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** The server will never accept this request as it is. An expired sign-in (401) is not that: it is sent again later. */
+const refused = (error: unknown) => error instanceof HistoryError && error.status >= 400 && error.status < 500 && error.status !== 401;
 
 type HistoryRequest = { action: "load" } | { action: "merge"; bundle: HistoryBundle } | { action: "reset" };
 
@@ -27,44 +39,56 @@ export async function callHistory(request: HistoryRequest): Promise<AccountHisto
     throw new OnlineError("Could not reach the server. Check your connection.");
   }
   const body = (await response.json().catch(() => ({}))) as { history?: AccountHistory; error?: string };
-  if (!response.ok || !body.history) throw new OnlineError(body.error ?? "Something went wrong.");
+  if (!response.ok || !body.history) throw new HistoryError(body.error ?? "Something went wrong.", response.status);
   return body.history;
 }
 
-/** The server's history with this account's still-queued changes shown on top. */
+/** The server's history with every change it has not confirmed yet (from any tab) shown on top. */
 function show(userId: string, history: AccountHistory) {
-  writeAccount({ userId, history: mergeHistory(history, readQueue(userId) ?? {}) });
+  writeAccount({ userId, history: mergeHistory(history, readPending(userId) ?? {}) });
 }
 
 async function flushOnce(userId: string): Promise<boolean> {
   const bundle = takeQueue(userId);
-  let history: AccountHistory;
+  const toSend = bundle && sendable(bundle);
+  let history: AccountHistory | null = null;
   try {
-    history = await callHistory(bundle && !isEmptyBundle(bundle) ? { action: "merge", bundle } : { action: "load" });
+    for (const part of toSend && !isEmptyBundle(toSend) ? splitBundle(toSend) : []) {
+      try {
+        history = await callHistory({ action: "merge", bundle: part });
+      } catch (error) {
+        // Sending it again would be refused again, so it is dropped rather than retried forever.
+        if (!refused(error)) throw error;
+      }
+    }
+    history ??= await callHistory({ action: "load" });
   } catch {
-    finishInflight(userId, false);
-    const account = readAccount();
-    if (account?.userId === userId) show(userId, account.history);
+    // The account copy already shows every queued change, so it stays as it is.
+    finishInflight(userId, false, bundle);
     return false;
   }
-  finishInflight(userId, true);
+  finishInflight(userId, true, bundle);
   if (readAccount()?.userId === userId) show(userId, history);
   return true;
 }
 
-let flight: Promise<boolean> | null = null;
+const flights = new Map<string, Promise<boolean>>();
 
-/** Send this account's queued changes (or just fetch its history). One flush runs at a time; changes queued meanwhile go next. */
+/** Send this account's queued changes (or just fetch its history). One flush per account runs at a time; changes queued meanwhile go next. */
 export function flushAccount(userId: string): Promise<boolean> {
-  flight ??= (async () => {
-    try {
-      let ok = await flushOnce(userId);
-      while (ok && readQueue(userId)) ok = await flushOnce(userId);
-      return ok;
-    } finally {
-      flight = null;
-    }
-  })();
+  let flight = flights.get(userId);
+  if (!flight) {
+    flight = (async () => {
+      try {
+        let ok = await flushOnce(userId);
+        while (ok && readQueue(userId)) ok = await flushOnce(userId);
+        return ok;
+      } finally {
+        flights.delete(userId);
+      }
+    })();
+    flights.set(userId, flight);
+  }
   return flight;
 }
 
@@ -72,13 +96,27 @@ export function flushAccount(userId: string): Promise<boolean> {
 export function syncAccount(userId: string): Promise<boolean> {
   const current = readAccount();
   if (current && current.userId !== userId) writeAccount(null);
+  // Guest data is cleared only once it is safely queued for this account.
   const guest = readGuestBundle();
-  if (guest) {
-    addToQueue(userId, guest);
-    clearGuest();
-  }
-  if (!readAccount()) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
+  const handed = guest !== null && addToQueue(userId, guest);
+  if (handed) clearGuest();
+  const account = readAccount();
+  if (!account) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
+  else if (handed) writeAccount({ userId, history: mergeHistory(account.history, guest) });
   return flushAccount(userId);
+}
+
+/**
+ * Keeps the account copy in step with Supabase sign-in events. Only a real
+ * sign-out clears it: offline with an expired token the first event has no
+ * session, and the copy must survive until a refreshed token brings it back.
+ */
+export function handleAuthChange(event: AuthChangeEvent, session: { user: { id: string } } | null) {
+  if (event === "SIGNED_OUT") writeAccount(null);
+  // Deferred: Supabase must not be called from inside its own auth callback.
+  else if (session && (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+    setTimeout(() => void syncAccount(session.user.id), 0);
+  }
 }
 
 /** RESET STATS while signed in: needs a connection, and sends queued changes first. */
@@ -93,10 +131,32 @@ export async function resetAccountHistory(): Promise<void> {
   show(userId, history);
 }
 
+/** How long SIGN OUT waits for the network at each step. */
+const SIGN_OUT_WAIT_MS = 3000;
+
+/** The promise's value, or "timeout" if it takes longer than `ms`. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Try to send what is queued, then sign out; anything unsent waits for this account's next sign-in. */
 export async function signOutAccount(): Promise<void> {
   const userId = readAccount()?.userId;
-  if (userId) await flushAccount(userId);
+  if (userId) await within(flushAccount(userId), SIGN_OUT_WAIT_MS);
   writeAccount(null);
-  await onlineClient()?.auth.signOut();
+  const auth = onlineClient()?.auth;
+  if (!auth) return;
+  const result = await within(auth.signOut(), SIGN_OUT_WAIT_MS);
+  // Offline with an expired token, signOut fails to refresh it and returns before removing the
+  // session, so this browser would stay signed in. Its storage key is removed here instead.
+  if (result === "timeout" || result.error) {
+    const key = (auth as unknown as { storageKey?: string }).storageKey;
+    try {
+      if (key) localStorage.removeItem(key);
+    } catch {
+      // Storage blocked: there is no stored session to remove.
+    }
+  }
 }

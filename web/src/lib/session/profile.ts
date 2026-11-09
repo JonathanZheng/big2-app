@@ -114,7 +114,7 @@ export function readGuestGameRecords(): GameRecord[] {
 }
 
 export function saveGameRecord(record: GameRecord) {
-  if (queueChange({ games: [record] })) return;
+  if (queueChange({ games: [record] }) !== null) return;
   try {
     localStorage.setItem(KEY, JSON.stringify([...readGuestGameRecords(), record].slice(-KEEP)));
   } catch {
