@@ -9,6 +9,10 @@ import type { SavedReview } from "@/lib/session/saved-reviews";
 
 export const GAME_CAP = 500;
 export const REVIEW_CAP = 50;
+/** The most of each of these one request to /api/history may carry. */
+export const PUZZLE_LIMIT = 400;
+export const DELETE_LIMIT = 200;
+export const MATCH_LIMIT = 500;
 
 /** Everything an account holds. */
 export interface AccountHistory {
@@ -106,12 +110,34 @@ export function combineBundles(earlier: HistoryBundle, later: Partial<HistoryBun
   const saved = new Set((later.reviews ?? []).map((r) => r.id));
   const deleted = new Set(later.deletedReviews ?? []);
   return {
-    games: mergeGames(earlier.games, later.games ?? []),
-    reviews: mergeReviews(earlier.reviews, later.reviews ?? []).filter((r) => !deleted.has(r.id)),
+    games: mergeGames(earlier.games, later.games ?? []).slice(-GAME_CAP),
+    reviews: mergeReviews(earlier.reviews, later.reviews ?? [])
+      .filter((r) => !deleted.has(r.id))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, REVIEW_CAP),
     deletedReviews: [...new Set([...earlier.deletedReviews.filter((id) => !saved.has(id)), ...deleted])],
     puzzles: mergePuzzles(earlier.puzzles, later.puzzles ?? {}),
     matches: [...earlier.matches, ...(later.matches ?? [])],
   };
+}
+
+/** Split a queued bundle into parts that each fit in one request. Games and reviews already fit the caps. */
+export function splitBundle(bundle: HistoryBundle): HistoryBundle[] {
+  const puzzles = Object.entries(bundle.puzzles);
+  const parts = Math.max(
+    1,
+    Math.ceil(puzzles.length / PUZZLE_LIMIT),
+    Math.ceil(bundle.deletedReviews.length / DELETE_LIMIT),
+    Math.ceil(bundle.matches.length / MATCH_LIMIT),
+  );
+  if (parts === 1) return [bundle];
+  return Array.from({ length: parts }, (_, i) => ({
+    games: i === 0 ? bundle.games : [],
+    reviews: i === 0 ? bundle.reviews : [],
+    deletedReviews: bundle.deletedReviews.slice(i * DELETE_LIMIT, (i + 1) * DELETE_LIMIT),
+    puzzles: Object.fromEntries(puzzles.slice(i * PUZZLE_LIMIT, (i + 1) * PUZZLE_LIMIT)),
+    matches: bundle.matches.slice(i * MATCH_LIMIT, (i + 1) * MATCH_LIMIT),
+  }));
 }
 
 /** The rows that must be written to turn `before` into `after`. */

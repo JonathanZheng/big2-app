@@ -4,8 +4,18 @@
  */
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
-import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory } from "./merge";
+import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
 import { addToQueue, finishInflight, readAccount, readQueue, takeQueue, writeAccount } from "./store";
+
+/** A request /api/history answered with an error status. */
+class HistoryError extends OnlineError {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** The server will never accept this request as it is. An expired sign-in (401) is not that: it is sent again later. */
+const refused = (error: unknown) => error instanceof HistoryError && error.status >= 400 && error.status < 500 && error.status !== 401;
 
 type HistoryRequest = { action: "load" } | { action: "merge"; bundle: HistoryBundle } | { action: "reset" };
 
@@ -27,7 +37,7 @@ export async function callHistory(request: HistoryRequest): Promise<AccountHisto
     throw new OnlineError("Could not reach the server. Check your connection.");
   }
   const body = (await response.json().catch(() => ({}))) as { history?: AccountHistory; error?: string };
-  if (!response.ok || !body.history) throw new OnlineError(body.error ?? "Something went wrong.");
+  if (!response.ok || !body.history) throw new HistoryError(body.error ?? "Something went wrong.", response.status);
   return body.history;
 }
 
@@ -38,9 +48,17 @@ function show(userId: string, history: AccountHistory) {
 
 async function flushOnce(userId: string): Promise<boolean> {
   const bundle = takeQueue(userId);
-  let history: AccountHistory;
+  let history: AccountHistory | null = null;
   try {
-    history = await callHistory(bundle && !isEmptyBundle(bundle) ? { action: "merge", bundle } : { action: "load" });
+    for (const part of bundle && !isEmptyBundle(bundle) ? splitBundle(bundle) : []) {
+      try {
+        history = await callHistory({ action: "merge", bundle: part });
+      } catch (error) {
+        // Sending it again would be refused again, so it is dropped rather than retried forever.
+        if (!refused(error)) throw error;
+      }
+    }
+    history ??= await callHistory({ action: "load" });
   } catch {
     finishInflight(userId, false);
     const account = readAccount();

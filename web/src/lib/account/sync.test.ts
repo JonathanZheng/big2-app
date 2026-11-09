@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GameState } from "@/lib/engine/game";
 import { saveGameRecord, type GameRecord } from "@/lib/session/profile";
+import type { SavedReview } from "@/lib/session/saved-reviews";
 import { readGuestBundle } from "./guest";
 import { type AccountHistory, emptyHistory } from "./merge";
 import { addToQueue, queueChange, readAccount, readQueue, writeAccount } from "./store";
 import { flushAccount, resetAccountHistory, signOutAccount, syncAccount } from "./sync";
 import { memoryStorage } from "./test-helpers";
+import { parseBundle } from "./validate";
 
 const auth = vi.hoisted(() => ({
   getSession: async () => ({ data: { session: { access_token: "t", user: { id: "a" } } } }),
@@ -19,6 +22,23 @@ vi.mock("@/lib/online/client", async (importOriginal) => {
 const game = (at: number): GameRecord => ({ at, difficulty: "easy", won: true, cardsLeft: 0, plays: [], suits: [0, 0, 0, 0], hints: 0 });
 const history = (games: GameRecord[]): AccountHistory => ({ ...emptyHistory(), games });
 const reply = (h: AccountHistory) => new Response(JSON.stringify({ history: h }), { status: 200 });
+const refuse = (status: number) => new Response(JSON.stringify({ error: "no" }), { status });
+
+const final: GameState = {
+  hands: [[], [5], [6, 7], [8]], current: 1, firstMove: false, lastPlay: null, passes: 0,
+  history: [{ player: 0, cards: [0] }], winner: 0,
+};
+const review = (i: number): SavedReview => ({
+  id: `r${i}`, at: i + 1, title: "VS BOTS · EASY", final, names: [], seats: [], youSeat: 0, players: [0], scoreAll: true,
+});
+
+/** Answer like /api/history: refuse a bundle its checks reject, otherwise reply with an empty history. */
+function serverChecks() {
+  fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(init.body as string);
+    return body.action === "merge" && !parseBundle(body.bundle) ? refuse(400) : reply(emptyHistory());
+  });
+}
 
 let fetchMock: ReturnType<typeof vi.fn>;
 const sent = (call: number) => JSON.parse(fetchMock.mock.calls[call][1].body as string);
@@ -94,6 +114,47 @@ describe("flushAccount", () => {
     expect(await flushAccount("a")).toBe(false);
     expect(readQueue("a")?.games.map((g) => g.at)).toEqual([3]);
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([3]);
+  });
+});
+
+describe("server limits", () => {
+  it("a queue that outgrew the server's caps still reaches the account", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    addToQueue("a", { reviews: Array.from({ length: 50 }, (_, i) => review(i)) });
+    addToQueue("a", { reviews: [review(50)] });
+    serverChecks();
+    expect(await flushAccount("a")).toBe(true);
+    expect(readQueue("a")).toBeNull();
+    expect(sent(0).bundle.reviews.map((r: SavedReview) => r.id)).toContain("r50");
+  });
+
+  it("sends more puzzle days than one request allows in parts", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    const day = (i: number) => new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10);
+    addToQueue("a", { puzzles: Object.fromEntries(Array.from({ length: 401 }, (_, i) => [day(i), { cards: [1], label: "Good" as const }])) });
+    serverChecks();
+    expect(await flushAccount("a")).toBe(true);
+    expect(readQueue("a")).toBeNull();
+    const days = fetchMock.mock.calls.flatMap((_, i) => Object.keys(sent(i).bundle.puzzles));
+    expect(new Set(days).size).toBe(401);
+  });
+
+  it("drops changes the server refuses instead of retrying them forever", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    queueChange({ games: [game(1)] });
+    fetchMock.mockResolvedValueOnce(refuse(400)).mockResolvedValueOnce(reply(emptyHistory()));
+    expect(await flushAccount("a")).toBe(true);
+    expect(readQueue("a")).toBeNull();
+    expect(sent(1)).toEqual({ action: "load" });
+    expect(readAccount()?.history.games).toEqual([]);
+  });
+
+  it("keeps changes queued when the sign-in has expired", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    queueChange({ games: [game(1)] });
+    fetchMock.mockResolvedValueOnce(refuse(401));
+    expect(await flushAccount("a")).toBe(false);
+    expect(readQueue("a")?.games.map((g) => g.at)).toEqual([1]);
   });
 });
 
