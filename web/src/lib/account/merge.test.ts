@@ -6,8 +6,9 @@ import type { GameAnalysis } from "@/lib/session/analysis";
 import type { GameRecord } from "@/lib/session/profile";
 import type { SavedReview } from "@/lib/session/saved-reviews";
 import {
-  type AccountHistory, betterPuzzle, combineBundles, emptyBundle, emptyHistory, historyChanges, mergeHistory,
+  type AccountHistory, betterPuzzle, combineBundles, emptyBundle, emptyHistory, historyChanges, mergeHistory, splitBundle,
 } from "./merge";
+import { parseBundle } from "./validate";
 
 const analysis = { moves: 10, best: 8, good: 1, inaccuracies: 1, mistakes: 0, blunders: 0 } as GameAnalysis;
 
@@ -98,6 +99,43 @@ describe("combineBundles", () => {
     expect(combined.games).toHaveLength(1);
     expect(combined.games[0].analysis).toEqual(analysis);
     expect(combined.matches.map((m) => m.id)).toEqual(["x", "y"]);
+  });
+
+  it("keeps a queue within the account's caps", () => {
+    const earlier = { ...emptyBundle(), games: Array.from({ length: 500 }, (_, i) => game(i + 1)), reviews: Array.from({ length: 50 }, (_, i) => review(`r${i}`, i)) };
+    const combined = combineBundles(earlier, { games: [game(501)], reviews: [review("r50", 50)] });
+    expect(combined.games).toHaveLength(500);
+    expect(combined.games[0].at).toBe(2);
+    expect(combined.games[499].at).toBe(501);
+    expect(combined.reviews).toHaveLength(50);
+    expect(combined.reviews.map((r) => r.id)).toContain("r50");
+    expect(combined.reviews.map((r) => r.id)).not.toContain("r0");
+  });
+});
+
+describe("splitBundle", () => {
+  const day = (i: number) => new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10);
+
+  it("splits a bundle into parts the server accepts, losing nothing", () => {
+    const bundle = {
+      ...emptyBundle(),
+      games: [game(1)],
+      puzzles: Object.fromEntries(Array.from({ length: 401 }, (_, i) => [day(i), puzzle("Good")])),
+      deletedReviews: Array.from({ length: 201 }, (_, i) => `d${i}`),
+      matches: Array.from({ length: 501 }, (_, i) => ({ id: `m${i}`, matches: 1, matchWins: 0 })),
+    };
+    const parts = splitBundle(bundle);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(parseBundle(part)).not.toBeNull();
+    expect(parts.flatMap((p) => p.games)).toHaveLength(1);
+    expect(parts.flatMap((p) => Object.keys(p.puzzles))).toHaveLength(401);
+    expect(parts.flatMap((p) => p.deletedReviews)).toHaveLength(201);
+    expect(parts.flatMap((p) => p.matches)).toHaveLength(501);
+  });
+
+  it("leaves a small bundle whole", () => {
+    const bundle = { ...emptyBundle(), games: [game(1)] };
+    expect(splitBundle(bundle)).toEqual([bundle]);
   });
 });
 

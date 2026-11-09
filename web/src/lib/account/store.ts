@@ -4,7 +4,9 @@
  * puzzle screens read from it. Storage can be blocked, so every access is
  * guarded; blocked storage behaves as signed out.
  */
-import { type AccountHistory, type HistoryBundle, combineBundles, emptyBundle, mergeHistory } from "./merge";
+import {
+  type AccountHistory, type HistoryBundle, bundleOverlap, combineBundles, emptyBundle, isEmptyBundle, mergeHistory,
+} from "./merge";
 
 const ACCOUNT_KEY = "big2.account.v1";
 const QUEUE_KEY = "big2.queue.v1";
@@ -68,6 +70,13 @@ export function addToQueue(userId: string, change: Partial<HistoryBundle>) {
   setEntry(QUEUE_KEY, userId, combineBundles(readQueue(userId) ?? emptyBundle(), change));
 }
 
+/** Everything not yet confirmed by the account: changes in flight from any tab, then the queue. */
+export function readPending(userId: string): HistoryBundle | null {
+  const inflight = read<Queues>(INFLIGHT_KEY)?.[userId] ?? null;
+  const queued = readQueue(userId);
+  return inflight || queued ? combineBundles(inflight ?? emptyBundle(), queued ?? {}) : null;
+}
+
 /** Move this account's queue into flight (with anything still in flight from before) and return it. */
 export function takeQueue(userId: string): HistoryBundle | null {
   const inflight = read<Queues>(INFLIGHT_KEY)?.[userId] ?? null;
@@ -79,11 +88,18 @@ export function takeQueue(userId: string): HistoryBundle | null {
   return read<Queues>(INFLIGHT_KEY)?.[userId] ?? null;
 }
 
-/** Drop a flight that reached the account, or put a failed one back ahead of newer changes. */
-export function finishInflight(userId: string, ok: boolean) {
+/**
+ * Drop a flight that reached the account, or put a failed one back ahead of
+ * newer changes. Only what this flight sent is touched: another tab may have
+ * taken more into flight meanwhile.
+ */
+export function finishInflight(userId: string, ok: boolean, sent: HistoryBundle | null) {
   const inflight = read<Queues>(INFLIGHT_KEY)?.[userId] ?? null;
-  setEntry(INFLIGHT_KEY, userId, null);
-  if (!ok && inflight) setEntry(QUEUE_KEY, userId, combineBundles(inflight, readQueue(userId) ?? {}));
+  if (!inflight || !sent) return;
+  const rest = bundleOverlap(inflight, sent, false);
+  setEntry(INFLIGHT_KEY, userId, isEmptyBundle(rest) ? null : rest);
+  const mine = bundleOverlap(inflight, sent, true);
+  if (!ok && !isEmptyBundle(mine)) setEntry(QUEUE_KEY, userId, combineBundles(mine, readQueue(userId) ?? {}));
 }
 
 /** Apply a change to the account copy and queue it for upload. False when signed out. */

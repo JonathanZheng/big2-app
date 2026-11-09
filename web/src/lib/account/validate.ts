@@ -3,7 +3,7 @@ import type { Label } from "@/lib/model/advice";
 import type { PuzzleResult } from "@/lib/puzzle/puzzle";
 import type { GameRecord } from "@/lib/session/profile";
 import type { SavedReview } from "@/lib/session/saved-reviews";
-import { GAME_CAP, type HistoryBundle, type MatchUpload, REVIEW_CAP } from "./merge";
+import { DELETE_LIMIT, GAME_CAP, type HistoryBundle, MATCH_LIMIT, type MatchUpload, PUZZLE_LIMIT, REVIEW_CAP } from "./merge";
 
 const LABELS: Label[] = ["Best", "Good", "Inaccuracy", "Mistake", "Blunder"];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -22,8 +22,8 @@ export function parseBundle(value: unknown): HistoryBundle | null {
   if (!isObject(value)) return null;
   const games = list(value.games, GAME_CAP);
   const reviews = list(value.reviews, REVIEW_CAP);
-  const deletedReviews = list(value.deletedReviews, 200);
-  const matches = list(value.matches, 500);
+  const deletedReviews = list(value.deletedReviews, DELETE_LIMIT);
+  const matches = list(value.matches, MATCH_LIMIT);
   const puzzles = value.puzzles === undefined ? {} : value.puzzles;
   if (!games || !reviews || !deletedReviews || !matches || !isObject(puzzles)) return null;
 
@@ -34,7 +34,7 @@ export function parseBundle(value: unknown): HistoryBundle | null {
     return null;
   }
   const days = Object.entries(puzzles);
-  if (days.length > 400) return null;
+  if (days.length > PUZZLE_LIMIT) return null;
   if (!days.every(([day, p]) => DAY.test(day) && isObject(p) && Array.isArray(p.cards) && LABELS.includes(p.label as Label))) return null;
 
   return {

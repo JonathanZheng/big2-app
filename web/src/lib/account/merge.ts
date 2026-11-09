@@ -9,6 +9,10 @@ import type { SavedReview } from "@/lib/session/saved-reviews";
 
 export const GAME_CAP = 500;
 export const REVIEW_CAP = 50;
+/** The most of each of these one request to /api/history may carry. */
+export const PUZZLE_LIMIT = 400;
+export const DELETE_LIMIT = 200;
+export const MATCH_LIMIT = 500;
 
 /** Everything an account holds. */
 export interface AccountHistory {
@@ -106,17 +110,55 @@ export function combineBundles(earlier: HistoryBundle, later: Partial<HistoryBun
   const saved = new Set((later.reviews ?? []).map((r) => r.id));
   const deleted = new Set(later.deletedReviews ?? []);
   return {
-    games: mergeGames(earlier.games, later.games ?? []),
-    reviews: mergeReviews(earlier.reviews, later.reviews ?? []).filter((r) => !deleted.has(r.id)),
+    games: mergeGames(earlier.games, later.games ?? []).slice(-GAME_CAP),
+    reviews: mergeReviews(earlier.reviews, later.reviews ?? [])
+      .filter((r) => !deleted.has(r.id))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, REVIEW_CAP),
     deletedReviews: [...new Set([...earlier.deletedReviews.filter((id) => !saved.has(id)), ...deleted])],
     puzzles: mergePuzzles(earlier.puzzles, later.puzzles ?? {}),
     matches: [...earlier.matches, ...(later.matches ?? [])],
   };
 }
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The parts of `bundle` that are (or with `inOther` false, are not) exactly the same in `other`. */
+export function bundleOverlap(bundle: HistoryBundle, other: HistoryBundle, inOther: boolean): HistoryBundle {
+  const games = new Map(other.games.map((g) => [g.at, g]));
+  const reviews = new Map(other.reviews.map((r) => [r.id, r]));
+  const deleted = new Set(other.deletedReviews);
+  const matches = new Map(other.matches.map((m) => [m.id, m]));
+  return {
+    games: bundle.games.filter((g) => same(games.get(g.at), g) === inOther),
+    reviews: bundle.reviews.filter((r) => same(reviews.get(r.id), r) === inOther),
+    deletedReviews: bundle.deletedReviews.filter((id) => deleted.has(id) === inOther),
+    puzzles: Object.fromEntries(Object.entries(bundle.puzzles).filter(([day, p]) => same(other.puzzles[day], p) === inOther)),
+    matches: bundle.matches.filter((m) => same(matches.get(m.id), m) === inOther),
+  };
+}
+
+/** Split a queued bundle into parts that each fit in one request. Games and reviews already fit the caps. */
+export function splitBundle(bundle: HistoryBundle): HistoryBundle[] {
+  const puzzles = Object.entries(bundle.puzzles);
+  const parts = Math.max(
+    1,
+    Math.ceil(puzzles.length / PUZZLE_LIMIT),
+    Math.ceil(bundle.deletedReviews.length / DELETE_LIMIT),
+    Math.ceil(bundle.matches.length / MATCH_LIMIT),
+  );
+  if (parts === 1) return [bundle];
+  return Array.from({ length: parts }, (_, i) => ({
+    games: i === 0 ? bundle.games : [],
+    reviews: i === 0 ? bundle.reviews : [],
+    deletedReviews: bundle.deletedReviews.slice(i * DELETE_LIMIT, (i + 1) * DELETE_LIMIT),
+    puzzles: Object.fromEntries(puzzles.slice(i * PUZZLE_LIMIT, (i + 1) * PUZZLE_LIMIT)),
+    matches: bundle.matches.slice(i * MATCH_LIMIT, (i + 1) * MATCH_LIMIT),
+  }));
+}
+
 /** The rows that must be written to turn `before` into `after`. */
 export function historyChanges(before: AccountHistory, after: AccountHistory): HistoryChanges {
-  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const oldGames = new Map(before.games.map((g) => [g.at, g]));
   const newGames = new Set(after.games.map((g) => g.at));
   const oldReviews = new Map(before.reviews.map((r) => [r.id, r]));
