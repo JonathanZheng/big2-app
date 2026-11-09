@@ -98,6 +98,17 @@ describe.skipIf(!APP)("account history", () => {
     expect(error !== null || (data ?? []).length === 0).toBe(true);
   });
 
+  it("signed-in and signed-out visitors have no grants on the tables", async () => {
+    const p = await player("grants");
+    const anon = createClient(URL, PUBLISHABLE, { auth: { persistSession: false } });
+    for (const table of ["history_games", "history_reviews", "history_puzzles", "history_matches"]) {
+      for (const db of [anon, p.db]) {
+        const { error } = await db.from(table).select().limit(1);
+        expect(error?.code, table).toBe("42501");
+      }
+    }
+  });
+
   it("rejects a malformed bundle", async () => {
     const p = await player("bad");
     const { status } = await call(p.token, { action: "merge", bundle: { games: "lots" } });
