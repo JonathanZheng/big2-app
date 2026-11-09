@@ -4,7 +4,7 @@ import { saveGameRecord, type GameRecord } from "@/lib/session/profile";
 import type { SavedReview } from "@/lib/session/saved-reviews";
 import { readGuestBundle } from "./guest";
 import { type AccountHistory, emptyHistory } from "./merge";
-import { addToQueue, queueChange, readAccount, readQueue, writeAccount } from "./store";
+import { addToQueue, finishInflight, queueChange, readAccount, readQueue, takeQueue, writeAccount } from "./store";
 import { flushAccount, resetAccountHistory, signOutAccount, syncAccount } from "./sync";
 import { memoryStorage } from "./test-helpers";
 import { parseBundle } from "./validate";
@@ -113,6 +113,22 @@ describe("flushAccount", () => {
     expect(sent(1).bundle.games.map((g: GameRecord) => g.at)).toEqual([2]);
     expect(readQueue("a")).toBeNull();
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([2]);
+  });
+
+  it("still shows another tab's game while that tab's flight is out", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    queueChange({ games: [game(1)] });
+    let answer: (r: Response) => void = () => undefined;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { answer = resolve; }));
+    const flushing = flushAccount("a");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    addToQueue("a", { games: [game(2)] }); // another tab finishes game 2 and starts sending it
+    const otherTab = takeQueue("a");
+    answer(reply(history([game(1)])));
+    expect(await flushing).toBe(true);
+    expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1, 2]);
+    finishInflight("a", false, otherTab);
+    expect(readQueue("a")?.games.map((g) => g.at)).toEqual([2]);
   });
 
   it("failed flushes never add queued matches to the screen again", async () => {

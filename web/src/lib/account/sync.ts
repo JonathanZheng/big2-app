@@ -5,7 +5,7 @@
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
 import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
-import { addToQueue, finishInflight, readAccount, readQueue, takeQueue, writeAccount } from "./store";
+import { addToQueue, finishInflight, readAccount, readPending, readQueue, takeQueue, writeAccount } from "./store";
 
 /** A request /api/history answered with an error status. */
 class HistoryError extends OnlineError {
@@ -41,9 +41,9 @@ export async function callHistory(request: HistoryRequest): Promise<AccountHisto
   return body.history;
 }
 
-/** The server's history with this account's still-queued changes shown on top. */
+/** The server's history with every change it has not confirmed yet (from any tab) shown on top. */
 function show(userId: string, history: AccountHistory) {
-  writeAccount({ userId, history: mergeHistory(history, readQueue(userId) ?? {}) });
+  writeAccount({ userId, history: mergeHistory(history, readPending(userId) ?? {}) });
 }
 
 async function flushOnce(userId: string): Promise<boolean> {
@@ -61,10 +61,10 @@ async function flushOnce(userId: string): Promise<boolean> {
     history ??= await callHistory({ action: "load" });
   } catch {
     // The account copy already shows every queued change, so it stays as it is.
-    finishInflight(userId, false);
+    finishInflight(userId, false, bundle);
     return false;
   }
-  finishInflight(userId, true);
+  finishInflight(userId, true, bundle);
   if (readAccount()?.userId === userId) show(userId, history);
   return true;
 }
