@@ -92,14 +92,13 @@ export function flushAccount(userId: string): Promise<boolean> {
 export function syncAccount(userId: string): Promise<boolean> {
   const current = readAccount();
   if (current && current.userId !== userId) writeAccount(null);
+  // Guest data is cleared only once it is safely queued for this account.
   const guest = readGuestBundle();
-  if (guest) {
-    addToQueue(userId, guest);
-    clearGuest();
-  }
+  const handed = guest !== null && addToQueue(userId, guest);
+  if (handed) clearGuest();
   const account = readAccount();
   if (!account) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
-  else if (guest) writeAccount({ userId, history: mergeHistory(account.history, guest) });
+  else if (handed) writeAccount({ userId, history: mergeHistory(account.history, guest) });
   return flushAccount(userId);
 }
 

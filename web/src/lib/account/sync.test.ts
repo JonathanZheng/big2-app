@@ -82,6 +82,21 @@ describe("syncAccount", () => {
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1, 7]);
   });
 
+  it("keeps guest data when storage refuses to queue it", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("localStorage", {
+      ...storage,
+      setItem: (k: string, v: string) => {
+        if (k === "big2.queue.v1") throw new Error("QuotaExceededError");
+        storage.setItem(k, v);
+      },
+    });
+    saveGameRecord(game(1));
+    fetchMock.mockResolvedValueOnce(reply(emptyHistory()));
+    await syncAccount("a");
+    expect(readGuestBundle()?.games.map((g) => g.at)).toEqual([1]);
+  });
+
   it("never sends another account's queue", async () => {
     addToQueue("b", { games: [game(9)] });
     fetchMock.mockResolvedValueOnce(reply(emptyHistory()));

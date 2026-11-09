@@ -26,6 +26,18 @@ function memoryStorage() {
   };
 }
 
+/** Storage that refuses to write one key, as when it is full. */
+function refusing(key: string) {
+  const storage = memoryStorage();
+  return {
+    ...storage,
+    setItem: (k: string, v: string) => {
+      if (k === key) throw new Error("QuotaExceededError");
+      storage.setItem(k, v);
+    },
+  };
+}
+
 let events: string[];
 
 beforeEach(() => {
@@ -112,6 +124,19 @@ describe("account store", () => {
     finishInflight("a", false, flightA);
     expect(readQueue("a")).toBeNull();
     expect(readPending("a")).toBeNull();
+  });
+
+  it("reports when storage refuses a queued change", () => {
+    vi.stubGlobal("localStorage", refusing("big2.queue.v1"));
+    expect(addToQueue("a", { games: [game(1)] })).toBe(false);
+  });
+
+  it("leaves the queue in place when the flight cannot be stored", () => {
+    const storage = refusing("big2.inflight.v1");
+    vi.stubGlobal("localStorage", storage);
+    expect(addToQueue("a", { games: [game(1)] })).toBe(true);
+    expect(takeQueue("a")).toBeNull();
+    expect(readQueue("a")?.games.map((g) => g.at)).toEqual([1]);
   });
 
   it("survives blocked storage", () => {
