@@ -30,6 +30,12 @@ export interface MatchUpload {
   matchWins: number;
 }
 
+/** A unique id for a match upload. crypto.randomUUID is missing outside secure contexts (plain http on a LAN) and in older Safari. */
+export function newUploadId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /** Changes on their way to the account. */
 export interface HistoryBundle {
   games: GameRecord[];

@@ -2,6 +2,7 @@
  * Win counts kept in this browser or, for matches, on the signed-in account.
  * Storage can be blocked, so every access is guarded.
  */
+import { newUploadId } from "@/lib/account/merge";
 import { queueChange, readAccount } from "@/lib/account/store";
 
 const KEY = "big2.stats.v1";
@@ -53,7 +54,10 @@ export function recordGame(won: boolean) {
 
 /** Record a multi-game match, including one finished early. */
 export function recordMatch(won: boolean) {
-  if (queueChange({ matches: [{ id: crypto.randomUUID(), matches: 1, matchWins: won ? 1 : 0 }] }) !== null) return;
+  if (readAccount()) {
+    queueChange({ matches: [{ id: newUploadId(), matches: 1, matchWins: won ? 1 : 0 }] });
+    return;
+  }
   update((stats) => {
     stats.matches += 1;
     if (won) stats.matchWins += 1;
