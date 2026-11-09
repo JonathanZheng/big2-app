@@ -64,12 +64,16 @@ export async function mergeIntoAccount(userId: string, bundle: HistoryBundle): P
   return loadHistory(userId);
 }
 
-/** RESET STATS: games and match counts go; saved reviews and puzzle answers stay. */
+/**
+ * RESET STATS: games and match counts go; saved reviews and puzzle answers stay.
+ * Match rows are zeroed, not deleted, so an upload retried after the reset is
+ * still recognised by its id and not counted again.
+ */
 export async function resetHistory(userId: string): Promise<AccountHistory> {
   const db = admin();
   await Promise.all([
     check(db.from("history_games").delete().eq("user_id", userId)),
-    check(db.from("history_matches").delete().eq("user_id", userId)),
+    check(db.from("history_matches").update({ matches: 0, match_wins: 0 }).eq("user_id", userId)),
   ]);
   return loadHistory(userId);
 }

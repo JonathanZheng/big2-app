@@ -91,6 +91,17 @@ describe.skipIf(!APP)("account history", () => {
     expect(Object.keys(body.history.puzzles)).toEqual(["2026-11-01"]);
   });
 
+  it("a match upload retried after a reset is still counted once", async () => {
+    const p = await player("retry");
+    const bundle = { matches: [{ id: "m1", matches: 2, matchWins: 1 }] };
+    await call(p.token, { action: "merge", bundle }); // committed, but the answer was lost
+    expect((await call(p.token, { action: "reset" })).body.history.matches).toBe(0);
+    const { body } = await call(p.token, { action: "merge", bundle });
+    expect([body.history.matches, body.history.matchWins]).toEqual([0, 0]);
+    await call(p.token, { action: "merge", bundle: { matches: [{ id: "m2", matches: 1, matchWins: 1 }] } });
+    expect((await call(p.token, { action: "load" })).body.history.matches).toBe(1);
+  });
+
   it("players cannot read the tables directly", async () => {
     const p = await player("direct");
     await call(p.token, { action: "merge", bundle: { games: [game(1)] } });
