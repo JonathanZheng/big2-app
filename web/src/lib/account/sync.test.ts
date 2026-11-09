@@ -130,6 +130,23 @@ describe("flushAccount", () => {
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([2]);
   });
 
+  it("never hands one account's running flush to another account", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    let answer: (r: Response) => void = () => undefined;
+    fetchMock
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { answer = resolve; }))
+      .mockImplementationOnce(async () => reply(emptyHistory()));
+    const forA = flushAccount("a");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    addToQueue("b", { games: [game(9)] });
+    const forB = flushAccount("b");
+    expect(forB).not.toBe(forA);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sent(1).bundle.games.map((g: GameRecord) => g.at)).toEqual([9]);
+    answer(reply(emptyHistory()));
+    await Promise.all([forA, forB]);
+  });
+
   it("still shows another tab's game while that tab's flight is out", async () => {
     writeAccount({ userId: "a", history: emptyHistory() });
     queueChange({ games: [game(1)] });

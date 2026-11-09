@@ -72,19 +72,23 @@ async function flushOnce(userId: string): Promise<boolean> {
   return true;
 }
 
-let flight: Promise<boolean> | null = null;
+const flights = new Map<string, Promise<boolean>>();
 
-/** Send this account's queued changes (or just fetch its history). One flush runs at a time; changes queued meanwhile go next. */
+/** Send this account's queued changes (or just fetch its history). One flush per account runs at a time; changes queued meanwhile go next. */
 export function flushAccount(userId: string): Promise<boolean> {
-  flight ??= (async () => {
-    try {
-      let ok = await flushOnce(userId);
-      while (ok && readQueue(userId)) ok = await flushOnce(userId);
-      return ok;
-    } finally {
-      flight = null;
-    }
-  })();
+  let flight = flights.get(userId);
+  if (!flight) {
+    flight = (async () => {
+      try {
+        let ok = await flushOnce(userId);
+        while (ok && readQueue(userId)) ok = await flushOnce(userId);
+        return ok;
+      } finally {
+        flights.delete(userId);
+      }
+    })();
+    flights.set(userId, flight);
+  }
   return flight;
 }
 
