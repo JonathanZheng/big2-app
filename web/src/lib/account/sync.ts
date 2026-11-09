@@ -60,9 +60,8 @@ async function flushOnce(userId: string): Promise<boolean> {
     }
     history ??= await callHistory({ action: "load" });
   } catch {
+    // The account copy already shows every queued change, so it stays as it is.
     finishInflight(userId, false);
-    const account = readAccount();
-    if (account?.userId === userId) show(userId, account.history);
     return false;
   }
   finishInflight(userId, true);
@@ -95,7 +94,9 @@ export function syncAccount(userId: string): Promise<boolean> {
     addToQueue(userId, guest);
     clearGuest();
   }
-  if (!readAccount()) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
+  const account = readAccount();
+  if (!account) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
+  else if (guest) writeAccount({ userId, history: mergeHistory(account.history, guest) });
   return flushAccount(userId);
 }
 

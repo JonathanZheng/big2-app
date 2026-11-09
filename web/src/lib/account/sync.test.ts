@@ -74,6 +74,14 @@ describe("syncAccount", () => {
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1]);
   });
 
+  it("shows guest games added to an existing account copy even when the upload fails", async () => {
+    saveGameRecord(game(1));
+    writeAccount({ userId: "a", history: history([game(7)]) });
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    expect(await syncAccount("a")).toBe(false);
+    expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1, 7]);
+  });
+
   it("never sends another account's queue", async () => {
     addToQueue("b", { games: [game(9)] });
     fetchMock.mockResolvedValueOnce(reply(emptyHistory()));
@@ -105,6 +113,15 @@ describe("flushAccount", () => {
     expect(sent(1).bundle.games.map((g: GameRecord) => g.at)).toEqual([2]);
     expect(readQueue("a")).toBeNull();
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([2]);
+  });
+
+  it("failed flushes never add queued matches to the screen again", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    queueChange({ matches: [{ id: "m1", matches: 1, matchWins: 1 }] });
+    fetchMock.mockRejectedValue(new TypeError("offline"));
+    for (let i = 0; i < 3; i++) expect(await flushAccount("a")).toBe(false);
+    expect(readAccount()?.history.matches).toBe(1);
+    expect(readAccount()?.history.matchWins).toBe(1);
   });
 
   it("shows queued changes on top of the server's history after a failed flush", async () => {
