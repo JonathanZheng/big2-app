@@ -66,6 +66,14 @@ body {
   box-shadow: 0 0 0 var(--ink);
 }
 
+/* Cards dealt into place once, and fields that open in. Used with motion-safe: only. */
+@keyframes deal {
+  from { translate: 150px 30px; rotate: 0deg; opacity: 0; }
+}
+@keyframes reveal {
+  from { opacity: 0; translate: 0 -6px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :is(a, button).shadow-brutal,
   :is(a, button).shadow-brutal-sm {
