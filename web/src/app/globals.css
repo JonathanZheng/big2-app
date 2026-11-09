@@ -40,3 +40,39 @@ body {
   background: var(--paper);
   color: var(--ink);
 }
+
+/*
+ * Raised controls answer the pointer: they lift toward it on hover and press
+ * flat into their shadow on click. Disabled buttons stay still.
+ */
+:is(a, button).shadow-brutal,
+:is(a, button).shadow-brutal-sm {
+  transition: translate 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+:is(a, button:not(:disabled)).shadow-brutal:hover {
+  translate: -2px -2px;
+  box-shadow: 8px 8px 0 var(--ink);
+}
+:is(a, button:not(:disabled)).shadow-brutal-sm:hover {
+  translate: -2px -2px;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+:is(a, button:not(:disabled)).shadow-brutal:active {
+  translate: 6px 6px;
+  box-shadow: 0 0 0 var(--ink);
+}
+:is(a, button:not(:disabled)).shadow-brutal-sm:active {
+  translate: 4px 4px;
+  box-shadow: 0 0 0 var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(a, button).shadow-brutal,
+  :is(a, button).shadow-brutal-sm {
+    transition: none;
+  }
+  :is(a, button:not(:disabled)).shadow-brutal:hover,
+  :is(a, button:not(:disabled)).shadow-brutal-sm:hover {
+    translate: none;
+  }
+}
