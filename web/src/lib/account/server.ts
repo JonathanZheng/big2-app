@@ -34,33 +34,18 @@ export async function loadHistory(userId: string): Promise<AccountHistory> {
 }
 
 export async function mergeIntoAccount(userId: string, bundle: HistoryBundle): Promise<AccountHistory> {
-  const db = admin();
   const before = await loadHistory(userId);
   const changes = historyChanges(before, mergeHistory(before, { ...bundle, matches: [] }));
-  const writes: PromiseLike<unknown>[] = [];
-  if (changes.upsertGames.length) {
-    writes.push(check(db.from("history_games").upsert(changes.upsertGames.map((g) => ({ user_id: userId, at: g.at, record: g })))));
-  }
-  if (changes.deleteGames.length) {
-    writes.push(check(db.from("history_games").delete().eq("user_id", userId).in("at", changes.deleteGames)));
-  }
-  if (changes.upsertReviews.length) {
-    writes.push(check(db.from("history_reviews").upsert(changes.upsertReviews.map((r) => ({ user_id: userId, id: r.id, at: r.at, review: r })))));
-  }
-  if (changes.deleteReviews.length) {
-    writes.push(check(db.from("history_reviews").delete().eq("user_id", userId).in("id", changes.deleteReviews)));
-  }
-  const days = Object.entries(changes.upsertPuzzles);
-  if (days.length) {
-    writes.push(check(db.from("history_puzzles").upsert(days.map(([day, result]) => ({ user_id: userId, day, result })))));
-  }
-  if (bundle.matches.length) {
-    writes.push(check(db.from("history_matches").upsert(
-      bundle.matches.map((m) => ({ user_id: userId, upload_id: m.id, matches: m.matches, match_wins: m.matchWins })),
-      { onConflict: "user_id,upload_id", ignoreDuplicates: true },
-    )));
-  }
-  await Promise.all(writes);
+  // One transaction, one merge per account at a time; it also trims to the caps
+  // and keeps the merge rules against a merge that committed after `before` was read.
+  await check(admin().rpc("merge_history", {
+    p_user: userId,
+    p_games: changes.upsertGames,
+    p_reviews: changes.upsertReviews,
+    p_deleted_reviews: bundle.deletedReviews,
+    p_puzzles: changes.upsertPuzzles,
+    p_matches: bundle.matches,
+  }));
   return loadHistory(userId);
 }
 

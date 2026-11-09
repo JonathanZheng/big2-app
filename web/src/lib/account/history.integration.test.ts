@@ -91,6 +91,39 @@ describe.skipIf(!APP)("account history", () => {
     expect(Object.keys(body.history.puzzles)).toEqual(["2026-11-01"]);
   });
 
+  it("concurrent merges never drop a stored analysis", async () => {
+    const p = await player("race");
+    const ats = Array.from({ length: 20 }, (_, i) => i + 1);
+    await Promise.all(ats.flatMap((at) => [
+      call(p.token, { action: "merge", bundle: { games: [game(at, true)] } }),
+      call(p.token, { action: "merge", bundle: { games: [game(at)] } }),
+    ]));
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games.filter((g) => !g.analysis).map((g) => g.at)).toEqual([]);
+  });
+
+  it("concurrent merges keep the 500 game cap", async () => {
+    const p = await player("cap");
+    const games = (from: number) => Array.from({ length: 300 }, (_, i) => game(from + i));
+    await Promise.all([1, 1001, 2001].map((from) => call(p.token, { action: "merge", bundle: { games: games(from) } })));
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games).toHaveLength(500);
+  });
+
+  it("keeps the newest 50 reviews and applies deletions", async () => {
+    const p = await player("reviews");
+    const reviews = Array.from({ length: 50 }, (_, i) => ({ ...review, id: `r${i}`, at: i + 1 }));
+    await call(p.token, { action: "merge", bundle: { reviews } });
+    const added = await call(p.token, { action: "merge", bundle: { reviews: [{ ...review, id: "new", at: 100 }] } });
+    const ids = added.body.history.reviews.map((r) => r.id);
+    expect(ids).toHaveLength(50);
+    expect(ids[0]).toBe("new");
+    expect(ids).not.toContain("r0");
+    const deleted = await call(p.token, { action: "merge", bundle: { deletedReviews: ["r49"] } });
+    expect(deleted.body.history.reviews.map((r) => r.id)).not.toContain("r49");
+    expect(deleted.body.history.reviews).toHaveLength(49);
+  });
+
   it("a match upload retried after a reset is still counted once", async () => {
     const p = await player("retry");
     const bundle = { matches: [{ id: "m1", matches: 2, matchWins: 1 }] };

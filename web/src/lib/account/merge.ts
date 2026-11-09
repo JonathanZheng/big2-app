@@ -47,9 +47,7 @@ export interface HistoryBundle {
 
 export interface HistoryChanges {
   upsertGames: GameRecord[];
-  deleteGames: number[];
   upsertReviews: SavedReview[];
-  deleteReviews: string[];
   upsertPuzzles: Record<string, PuzzleResult>;
 }
 
@@ -170,17 +168,13 @@ export function splitBundle(bundle: HistoryBundle): HistoryBundle[] {
   }));
 }
 
-/** The rows that must be written to turn `before` into `after`. */
+/** The rows that must be written to turn `before` into `after`. Deletions and trimming to the caps happen in the database. */
 export function historyChanges(before: AccountHistory, after: AccountHistory): HistoryChanges {
   const oldGames = new Map(before.games.map((g) => [g.at, g]));
-  const newGames = new Set(after.games.map((g) => g.at));
   const oldReviews = new Map(before.reviews.map((r) => [r.id, r]));
-  const newReviews = new Set(after.reviews.map((r) => r.id));
   return {
     upsertGames: after.games.filter((g) => !same(oldGames.get(g.at), g)),
-    deleteGames: before.games.filter((g) => !newGames.has(g.at)).map((g) => g.at),
     upsertReviews: after.reviews.filter((r) => !same(oldReviews.get(r.id), r)),
-    deleteReviews: before.reviews.filter((r) => !newReviews.has(r.id)).map((r) => r.id),
     upsertPuzzles: Object.fromEntries(Object.entries(after.puzzles).filter(([day, p]) => !same(before.puzzles[day], p))),
   };
 }
