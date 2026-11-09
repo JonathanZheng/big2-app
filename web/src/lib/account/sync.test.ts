@@ -5,7 +5,7 @@ import type { SavedReview } from "@/lib/session/saved-reviews";
 import { readGuestBundle } from "./guest";
 import { type AccountHistory, emptyHistory } from "./merge";
 import { addToQueue, finishInflight, queueChange, readAccount, readQueue, takeQueue, writeAccount } from "./store";
-import { flushAccount, resetAccountHistory, signOutAccount, syncAccount } from "./sync";
+import { flushAccount, handleAuthChange, resetAccountHistory, signOutAccount, syncAccount } from "./sync";
 import { memoryStorage } from "./test-helpers";
 import { parseBundle } from "./validate";
 
@@ -188,6 +188,39 @@ describe("server limits", () => {
     fetchMock.mockResolvedValueOnce(refuse(401));
     expect(await flushAccount("a")).toBe(false);
     expect(readQueue("a")?.games.map((g) => g.at)).toEqual([1]);
+  });
+});
+
+describe("handleAuthChange", () => {
+  const session = { user: { id: "a" } };
+
+  it("keeps the account copy when the first session check fails offline", () => {
+    writeAccount({ userId: "a", history: history([game(1)]) });
+    handleAuthChange("INITIAL_SESSION", null);
+    expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1]);
+  });
+
+  it("clears the account copy on sign-out", () => {
+    writeAccount({ userId: "a", history: history([game(1)]) });
+    handleAuthChange("SIGNED_OUT", null);
+    expect(readAccount()).toBeNull();
+  });
+
+  it("syncs when a refreshed token brings the session back", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    queueChange({ games: [game(1)] });
+    fetchMock.mockResolvedValueOnce(reply(history([game(1)])));
+    handleAuthChange("TOKEN_REFRESHED", session);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sent(0).action).toBe("merge");
+  });
+
+  it("syncs on sign-in and on the first session check", async () => {
+    fetchMock.mockImplementation(async () => reply(emptyHistory()));
+    handleAuthChange("SIGNED_IN", session);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    handleAuthChange("INITIAL_SESSION", session);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 });
 

@@ -2,6 +2,7 @@
  * Browser side of account history: hands guest data to the account on
  * sign-in, sends queued changes, and keeps the account copy current.
  */
+import type { AuthChangeEvent } from "@supabase/supabase-js";
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
 import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
@@ -98,6 +99,19 @@ export function syncAccount(userId: string): Promise<boolean> {
   if (!account) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
   else if (guest) writeAccount({ userId, history: mergeHistory(account.history, guest) });
   return flushAccount(userId);
+}
+
+/**
+ * Keeps the account copy in step with Supabase sign-in events. Only a real
+ * sign-out clears it: offline with an expired token the first event has no
+ * session, and the copy must survive until a refreshed token brings it back.
+ */
+export function handleAuthChange(event: AuthChangeEvent, session: { user: { id: string } } | null) {
+  if (event === "SIGNED_OUT") writeAccount(null);
+  // Deferred: Supabase must not be called from inside its own auth callback.
+  else if (session && (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+    setTimeout(() => void syncAccount(session.user.id), 0);
+  }
 }
 
 /** RESET STATS while signed in: needs a connection, and sends queued changes first. */
