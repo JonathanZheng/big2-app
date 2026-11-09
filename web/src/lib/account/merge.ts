@@ -127,7 +127,14 @@ export function combineBundles(earlier: HistoryBundle, later: Partial<HistoryBun
   };
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** JSON with object keys sorted, so two values compare equal whatever order their keys are in (jsonb reorders them). */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => (v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    : v));
+}
+
+const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
 
 /** The parts of `bundle` that are (or with `inOther` false, are not) exactly the same in `other`. */
 export function bundleOverlap(bundle: HistoryBundle, other: HistoryBundle, inOther: boolean): HistoryBundle {
