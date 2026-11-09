@@ -46,14 +46,15 @@ function write(reviews: SavedReview[]): boolean {
 
 /** Save a review at the top of the list; saving one already there keeps its place. Returns false if storage refused it. */
 export function saveReview(review: SavedReview): boolean {
-  if (readAccount()) return queueChange({ reviews: [review] });
+  const queued = queueChange({ reviews: [review] });
+  if (queued !== null) return queued;
   const saved = readGuestReviews();
   if (saved.some((r) => r.id === review.id)) return write(saved.map((r) => (r.id === review.id ? review : r)));
   return write([review, ...saved]);
 }
 
 export function deleteSavedReview(id: string) {
-  if (queueChange({ deletedReviews: [id] })) return;
+  if (queueChange({ deletedReviews: [id] }) !== null) return;
   write(readGuestReviews().filter((r) => r.id !== id));
 }
 

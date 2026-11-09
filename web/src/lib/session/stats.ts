@@ -53,7 +53,7 @@ export function recordGame(won: boolean) {
 
 /** Record a multi-game match, including one finished early. */
 export function recordMatch(won: boolean) {
-  if (queueChange({ matches: [{ id: crypto.randomUUID(), matches: 1, matchWins: won ? 1 : 0 }] })) return;
+  if (queueChange({ matches: [{ id: crypto.randomUUID(), matches: 1, matchWins: won ? 1 : 0 }] }) !== null) return;
   update((stats) => {
     stats.matches += 1;
     if (won) stats.matchWins += 1;

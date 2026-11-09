@@ -106,11 +106,14 @@ export function finishInflight(userId: string, ok: boolean, sent: HistoryBundle 
   if (!ok && !isEmptyBundle(mine)) setEntry(QUEUE_KEY, userId, combineBundles(mine, readQueue(userId) ?? {}));
 }
 
-/** Apply a change to the account copy and queue it for upload. False when signed out. */
-export function queueChange(change: Partial<HistoryBundle>): boolean {
+/**
+ * Apply a change to the account copy and queue it for upload. Null when
+ * signed out; otherwise false when storage refused it (then nothing changes).
+ */
+export function queueChange(change: Partial<HistoryBundle>): boolean | null {
   const account = readAccount();
-  if (!account) return false;
-  addToQueue(account.userId, change);
+  if (!account) return null;
+  if (!addToQueue(account.userId, change)) return false;
   write(ACCOUNT_KEY, { ...account, history: mergeHistory(account.history, change) });
   fire(HISTORY_EVENT);
   fire(QUEUE_EVENT);
