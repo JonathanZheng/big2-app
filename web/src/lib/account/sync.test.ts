@@ -182,6 +182,15 @@ describe("server limits", () => {
     expect(readAccount()?.history.games).toEqual([]);
   });
 
+  it("leaves out an item the server would refuse and sends the rest", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    addToQueue("a", { games: [game(1), { ...game(2), suits: undefined } as unknown as GameRecord] });
+    serverChecks();
+    expect(await flushAccount("a")).toBe(true);
+    expect(sent(0).bundle.games.map((g: GameRecord) => g.at)).toEqual([1]);
+    expect(readQueue("a")).toBeNull();
+  });
+
   it("keeps changes queued when the sign-in has expired", async () => {
     writeAccount({ userId: "a", history: emptyHistory() });
     queueChange({ games: [game(1)] });

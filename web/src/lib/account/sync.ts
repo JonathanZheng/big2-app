@@ -6,6 +6,7 @@ import type { AuthChangeEvent } from "@supabase/supabase-js";
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
 import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
+import { sendable } from "./validate";
 import { addToQueue, finishInflight, readAccount, readPending, readQueue, takeQueue, writeAccount } from "./store";
 
 /** A request /api/history answered with an error status. */
@@ -49,9 +50,10 @@ function show(userId: string, history: AccountHistory) {
 
 async function flushOnce(userId: string): Promise<boolean> {
   const bundle = takeQueue(userId);
+  const toSend = bundle && sendable(bundle);
   let history: AccountHistory | null = null;
   try {
-    for (const part of bundle && !isEmptyBundle(bundle) ? splitBundle(bundle) : []) {
+    for (const part of toSend && !isEmptyBundle(toSend) ? splitBundle(toSend) : []) {
       try {
         history = await callHistory({ action: "merge", bundle: part });
       } catch (error) {

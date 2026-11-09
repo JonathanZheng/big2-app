@@ -39,12 +39,15 @@ async function call(token: string | null, body: Record<string, unknown>) {
   return { status: response.status, body: (await response.json()) as { history: AccountHistory; error?: string } };
 }
 
+const analysis = { moves: 1, best: 1, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, passedInstead: 0, playedInstead: 0, otherPlay: 0 };
 const game = (at: number, analysed = false) => ({
   at, difficulty: "easy", won: true, cardsLeft: 0, plays: [0, 1], suits: [1, 0, 0, 0], hints: 0,
-  ...(analysed ? { analysis: { moves: 1, best: 1 } } : {}),
+  ...(analysed ? { analysis } : {}),
 });
 
-const review = { id: "r1", at: 5, title: "VS BOTS · EASY", final: {}, names: [], seats: [], youSeat: 0, players: [0], scoreAll: true };
+const final = { hands: [[], [], [], []], current: 0, firstMove: false, lastPlay: null, passes: 0, history: [], winner: 0 };
+const review = { id: "r1", at: 5, title: "VS BOTS · EASY", final, names: [], seats: [], youSeat: 0, players: [0], scoreAll: true };
+const puzzles = { "2026-11-01": { cards: [1], label: "Good" } };
 
 describe.skipIf(!APP)("account history", () => {
   it("requires sign-in", async () => {
@@ -99,5 +102,26 @@ describe.skipIf(!APP)("account history", () => {
     const p = await player("bad");
     const { status } = await call(p.token, { action: "merge", bundle: { games: "lots" } });
     expect(status).toBe(400);
+  });
+
+  it("a bundle with one bad record writes nothing", async () => {
+    const p = await player("atomic");
+    const { status } = await call(p.token, { action: "merge", bundle: { games: [game(1), game(1.5)], reviews: [review], puzzles } });
+    expect(status).toBe(400);
+    const { body } = await call(p.token, { action: "load" });
+    expect([body.history.games, body.history.reviews, body.history.puzzles]).toEqual([[], [], {}]);
+  });
+
+  it("rejects a game record missing the fields the profile reads", async () => {
+    const p = await player("fields");
+    expect((await call(p.token, { action: "merge", bundle: { games: [{ at: 5 }] } })).status).toBe(400);
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games).toEqual([]);
+  });
+
+  it("refuses a request that is too large", async () => {
+    const p = await player("large");
+    const { status } = await call(p.token, { action: "merge", bundle: { games: [{ ...game(1), note: "x".repeat(2_000_000) }] } });
+    expect(status).toBe(413);
   });
 });
