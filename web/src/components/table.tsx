@@ -12,6 +12,15 @@ function lastAction(game: GameState, seat: number): string {
   return "WAITING";
 }
 
+/** Where a play comes from, by seat relative to the hand shown: you below, then west, north, east. */
+const ENTER_FROM = [{ x: 0, y: 220 }, { x: -260, y: -40 }, { x: 0, y: -160 }, { x: 260, y: -40 }];
+
+/** Index in the history of the play on the table, so a new play can be told from a pass. */
+function lastPlayIndex(game: GameState): number {
+  for (let i = game.history.length - 1; i >= 0; i--) if (game.history[i].cards.length > 0) return i;
+  return -1;
+}
+
 /**
  * The seats and the trick in the middle. Vs bots shows the three opponents;
  * one-device games show all four seats.
@@ -67,7 +76,12 @@ export function Table({ game, thinking, names = SEAT_NAMES, seats = [1, 2, 3], y
           {game.lastPlay && <span>{game.passes} {game.passes === 1 ? "PASS" : "PASSES"}</span>}
         </div>
         <div className="min-h-24 flex items-center">
-          {game.lastPlay ? <CardRow cards={game.lastPlay.cards} /> : <span className="font-mono text-sm">EMPTY TABLE</span>}
+          {game.lastPlay ? (
+            // Keyed by the play, so each new play travels in from its seat and passes leave it still.
+            <CardRow key={lastPlayIndex(game)} cards={game.lastPlay.cards} enterFrom={ENTER_FROM[(game.lastPlay.player - youSeat + 4) % 4]} />
+          ) : (
+            <span className="font-mono text-sm">EMPTY TABLE</span>
+          )}
         </div>
         <div className="font-mono text-xs">
           {game.winner !== null

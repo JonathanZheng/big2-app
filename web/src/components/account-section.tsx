@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SignIn, useAccount } from "@/components/account-panel";
 import { signOutAccount } from "@/lib/account/sync";
@@ -25,7 +26,15 @@ export function AccountSection() {
 
   if (!supabase) return <p className="font-mono text-sm">ACCOUNTS ARE NOT SET UP ON THIS SITE YET. YOUR STATS STAY IN THIS BROWSER.</p>;
   if (account === undefined) return <p className="font-mono text-sm">CHECKING YOUR SIGN-IN...</p>;
-  if (account === null || account.name === null) return <SignIn account={account} onChange={refresh} />;
+  if (account === null) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="font-mono text-sm max-w-[52ch]">PLAYING AS A GUEST. SIGN IN TO KEEP THESE STATS ON EVERY DEVICE.</p>
+        <Link href="/signin" className={`${button} px-4 py-3 bg-accent shadow-brutal-sm text-sm`}>SIGN IN OR CREATE ACCOUNT</Link>
+      </div>
+    );
+  }
+  if (account.name === null) return <SignIn account={account} onChange={refresh} />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

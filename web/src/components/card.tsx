@@ -26,14 +26,24 @@ export function CardFace({ card, selected = false, dimmed = false, compact = fal
   );
 }
 
-/** Cards laid out in a row, for the table and history. */
-export function CardRow({ cards, size = "md" }: { cards: Card[]; size?: "sm" | "md" }) {
+/**
+ * Cards laid out in a row, for the table and history. With `enterFrom`, the
+ * cards travel in from that offset (the seat that played them), one after another.
+ */
+export function CardRow({ cards, size = "md", enterFrom }: { cards: Card[]; size?: "sm" | "md"; enterFrom?: { x: number; y: number } }) {
   const box = size === "sm" ? "w-8 h-11" : "w-14 h-20 sm:w-16 sm:h-24";
   return (
     <span className="flex gap-1.5">
-      {cards.map((c) => (
-        <CardFace key={c} card={c} compact={size === "sm"} className={`${box} shadow-brutal-sm`} />
-      ))}
+      {cards.map((c, i) =>
+        enterFrom ? (
+          <span key={c} className="motion-safe:animate-[land_420ms_cubic-bezier(0.16,1,0.3,1)_both]"
+            style={{ "--dx": `${enterFrom.x - i * 30}px`, "--dy": `${enterFrom.y}px`, "--rot": `${i % 2 ? 6 : -6}deg`, animationDelay: `${i * 50}ms` } as React.CSSProperties}>
+            <CardFace card={c} className={`${box} shadow-brutal-sm`} />
+          </span>
+        ) : (
+          <CardFace key={c} card={c} compact={size === "sm"} className={`${box} shadow-brutal-sm`} />
+        ),
+      )}
     </span>
   );
 }
