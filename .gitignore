@@ -227,3 +227,6 @@ checkpoints/
 
 # macOS
 .DS_Store
+
+# Supabase CLI link state from running it at the repo root (the project lives in web/)
+/supabase/.temp/
