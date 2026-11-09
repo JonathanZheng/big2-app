@@ -70,6 +70,9 @@ body {
 @keyframes deal {
   from { translate: 150px 30px; rotate: 0deg; opacity: 0; }
 }
+@keyframes land {
+  from { transform: translate(var(--dx, 0px), var(--dy, 0px)) rotate(var(--rot, 0deg)); opacity: 0.2; }
+}
 @keyframes reveal {
   from { opacity: 0; translate: 0 -6px; }
 }
