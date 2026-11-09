@@ -11,7 +11,8 @@ import { parseBundle } from "./validate";
 
 const auth = vi.hoisted(() => ({
   getSession: async () => ({ data: { session: { access_token: "t", user: { id: "a" } } } }),
-  signOut: vi.fn(async () => ({ error: null })),
+  signOut: vi.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
+  storageKey: "sb-test-auth-token",
 }));
 
 vi.mock("@/lib/online/client", async (importOriginal) => {
@@ -48,7 +49,8 @@ beforeEach(() => {
   vi.stubGlobal("navigator", { onLine: true });
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
-  auth.signOut.mockClear();
+  auth.signOut.mockReset();
+  auth.signOut.mockImplementation(async () => ({ error: null }));
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -82,6 +84,21 @@ describe("syncAccount", () => {
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([1, 7]);
   });
 
+  it("keeps guest data when storage refuses to queue it", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("localStorage", {
+      ...storage,
+      setItem: (k: string, v: string) => {
+        if (k === "big2.queue.v1") throw new Error("QuotaExceededError");
+        storage.setItem(k, v);
+      },
+    });
+    saveGameRecord(game(1));
+    fetchMock.mockResolvedValueOnce(reply(emptyHistory()));
+    await syncAccount("a");
+    expect(readGuestBundle()?.games.map((g) => g.at)).toEqual([1]);
+  });
+
   it("never sends another account's queue", async () => {
     addToQueue("b", { games: [game(9)] });
     fetchMock.mockResolvedValueOnce(reply(emptyHistory()));
@@ -113,6 +130,23 @@ describe("flushAccount", () => {
     expect(sent(1).bundle.games.map((g: GameRecord) => g.at)).toEqual([2]);
     expect(readQueue("a")).toBeNull();
     expect(readAccount()?.history.games.map((g) => g.at)).toEqual([2]);
+  });
+
+  it("never hands one account's running flush to another account", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    let answer: (r: Response) => void = () => undefined;
+    fetchMock
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { answer = resolve; }))
+      .mockImplementationOnce(async () => reply(emptyHistory()));
+    const forA = flushAccount("a");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    addToQueue("b", { games: [game(9)] });
+    const forB = flushAccount("b");
+    expect(forB).not.toBe(forA);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(sent(1).bundle.games.map((g: GameRecord) => g.at)).toEqual([9]);
+    answer(reply(emptyHistory()));
+    await Promise.all([forA, forB]);
   });
 
   it("still shows another tab's game while that tab's flight is out", async () => {
@@ -180,6 +214,15 @@ describe("server limits", () => {
     expect(readQueue("a")).toBeNull();
     expect(sent(1)).toEqual({ action: "load" });
     expect(readAccount()?.history.games).toEqual([]);
+  });
+
+  it("leaves out an item the server would refuse and sends the rest", async () => {
+    writeAccount({ userId: "a", history: emptyHistory() });
+    addToQueue("a", { games: [game(1), { ...game(2), suits: undefined } as unknown as GameRecord] });
+    serverChecks();
+    expect(await flushAccount("a")).toBe(true);
+    expect(sent(0).bundle.games.map((g: GameRecord) => g.at)).toEqual([1]);
+    expect(readQueue("a")).toBeNull();
   });
 
   it("keeps changes queued when the sign-in has expired", async () => {
@@ -258,5 +301,50 @@ describe("signOutAccount", () => {
     await signOutAccount();
     expect(readAccount()).toBeNull();
     expect(readQueue("a")?.games.map((g) => g.at)).toEqual([4]);
+  });
+
+  it("does not wait forever for an unanswered flush", async () => {
+    vi.useFakeTimers();
+    try {
+      writeAccount({ userId: "a", history: emptyHistory() });
+      queueChange({ games: [game(4)] });
+      let answer: (r: Response) => void = () => undefined;
+      fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { answer = resolve; }));
+      let done = false;
+      void signOutAccount().then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(done).toBe(true);
+      expect(readAccount()).toBeNull();
+      expect(auth.signOut).toHaveBeenCalled();
+      answer(reply(emptyHistory())); // let the flush end so later tests start clean
+      await flushAccount("a");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("removes the local session when Supabase cannot sign out offline", async () => {
+    localStorage.setItem("sb-test-auth-token", "{}");
+    writeAccount({ userId: "a", history: emptyHistory() });
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    auth.signOut.mockImplementation(async () => ({ error: new Error("Failed to fetch") }));
+    await signOutAccount();
+    expect(localStorage.getItem("sb-test-auth-token")).toBeNull();
+  });
+
+  it("removes the local session when Supabase never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.setItem("sb-test-auth-token", "{}");
+      fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+      auth.signOut.mockImplementation(() => new Promise(() => undefined));
+      let done = false;
+      void signOutAccount().then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(done).toBe(true);
+      expect(localStorage.getItem("sb-test-auth-token")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

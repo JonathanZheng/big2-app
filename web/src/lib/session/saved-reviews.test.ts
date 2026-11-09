@@ -62,4 +62,20 @@ describe("signed in", () => {
     expect(readSavedReviews()).toEqual([]);
     expect(readQueue("a")?.deletedReviews).toEqual(["1"]);
   });
+
+  it("reports a review storage refused, and keeps it out of guest storage", () => {
+    signedIn();
+    const storage = localStorage;
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => storage.getItem(k),
+      setItem: (k: string, v: string) => {
+        if (k === "big2.queue.v1") throw new Error("QuotaExceededError");
+        storage.setItem(k, v);
+      },
+      removeItem: (k: string) => storage.removeItem(k),
+    });
+    expect(saveReview(review(1))).toBe(false);
+    expect(readSavedReviews()).toEqual([]);
+    expect(readGuestReviews()).toEqual([]);
+  });
 });

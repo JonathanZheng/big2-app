@@ -17,58 +17,48 @@ async function check<T>(query: PromiseLike<{ data: T; error: { message: string }
 
 export async function loadHistory(userId: string): Promise<AccountHistory> {
   const db = admin();
-  const [games, reviews, puzzles, matches] = await Promise.all([
+  const [games, reviews, puzzles, totals] = await Promise.all([
     check(db.from("history_games").select("record").eq("user_id", userId).order("at")),
     check(db.from("history_reviews").select("review").eq("user_id", userId).order("at", { ascending: false })),
     check(db.from("history_puzzles").select("day, result").eq("user_id", userId)),
-    check(db.from("history_matches").select("matches, match_wins").eq("user_id", userId)),
+    check(db.rpc("history_match_totals", { p_user: userId }).single()),
   ]);
   return {
     games: (games as { record: GameRecord }[]).map((g) => g.record),
     reviews: (reviews as { review: SavedReview }[]).map((r) => r.review),
     puzzles: Object.fromEntries((puzzles as { day: string; result: PuzzleResult }[]).map((p) => [p.day, p.result])),
-    matches: (matches as { matches: number }[]).reduce((n, m) => n + m.matches, 0),
-    matchWins: (matches as { match_wins: number }[]).reduce((n, m) => n + m.match_wins, 0),
+    // Sums come back as bigint, which arrives as a number or a string.
+    matches: Number((totals as { matches: number | string }).matches),
+    matchWins: Number((totals as { match_wins: number | string }).match_wins),
   };
 }
 
 export async function mergeIntoAccount(userId: string, bundle: HistoryBundle): Promise<AccountHistory> {
-  const db = admin();
   const before = await loadHistory(userId);
   const changes = historyChanges(before, mergeHistory(before, { ...bundle, matches: [] }));
-  const writes: PromiseLike<unknown>[] = [];
-  if (changes.upsertGames.length) {
-    writes.push(check(db.from("history_games").upsert(changes.upsertGames.map((g) => ({ user_id: userId, at: g.at, record: g })))));
-  }
-  if (changes.deleteGames.length) {
-    writes.push(check(db.from("history_games").delete().eq("user_id", userId).in("at", changes.deleteGames)));
-  }
-  if (changes.upsertReviews.length) {
-    writes.push(check(db.from("history_reviews").upsert(changes.upsertReviews.map((r) => ({ user_id: userId, id: r.id, at: r.at, review: r })))));
-  }
-  if (changes.deleteReviews.length) {
-    writes.push(check(db.from("history_reviews").delete().eq("user_id", userId).in("id", changes.deleteReviews)));
-  }
-  const days = Object.entries(changes.upsertPuzzles);
-  if (days.length) {
-    writes.push(check(db.from("history_puzzles").upsert(days.map(([day, result]) => ({ user_id: userId, day, result })))));
-  }
-  if (bundle.matches.length) {
-    writes.push(check(db.from("history_matches").upsert(
-      bundle.matches.map((m) => ({ user_id: userId, upload_id: m.id, matches: m.matches, match_wins: m.matchWins })),
-      { onConflict: "user_id,upload_id", ignoreDuplicates: true },
-    )));
-  }
-  await Promise.all(writes);
+  // One transaction, one merge per account at a time; it also trims to the caps
+  // and keeps the merge rules against a merge that committed after `before` was read.
+  await check(admin().rpc("merge_history", {
+    p_user: userId,
+    p_games: changes.upsertGames,
+    p_reviews: changes.upsertReviews,
+    p_deleted_reviews: bundle.deletedReviews,
+    p_puzzles: changes.upsertPuzzles,
+    p_matches: bundle.matches,
+  }));
   return loadHistory(userId);
 }
 
-/** RESET STATS: games and match counts go; saved reviews and puzzle answers stay. */
+/**
+ * RESET STATS: games and match counts go; saved reviews and puzzle answers stay.
+ * Match rows are zeroed, not deleted, so an upload retried after the reset is
+ * still recognised by its id and not counted again.
+ */
 export async function resetHistory(userId: string): Promise<AccountHistory> {
   const db = admin();
   await Promise.all([
     check(db.from("history_games").delete().eq("user_id", userId)),
-    check(db.from("history_matches").delete().eq("user_id", userId)),
+    check(db.from("history_matches").update({ matches: 0, match_wins: 0 }).eq("user_id", userId)),
   ]);
   return loadHistory(userId);
 }

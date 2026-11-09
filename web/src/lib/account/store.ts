@@ -33,12 +33,14 @@ function read<T>(key: string): T | null {
   }
 }
 
-function write(key: string, value: unknown) {
+/** False when storage refused the write (blocked or full). */
+function write(key: string, value: unknown): boolean {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // Storage blocked: nothing is kept.
+    return false;
   }
 }
 
@@ -46,11 +48,11 @@ function fire(type: string) {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(type));
 }
 
-function setEntry(key: string, userId: string, bundle: HistoryBundle | null) {
+function setEntry(key: string, userId: string, bundle: HistoryBundle | null): boolean {
   const all = read<Queues>(key) ?? {};
   if (bundle) all[userId] = bundle;
   else delete all[userId];
-  write(key, Object.keys(all).length ? all : null);
+  return write(key, Object.keys(all).length ? all : null);
 }
 
 export function readAccount(): AccountCache | null {
@@ -66,8 +68,9 @@ export function readQueue(userId: string): HistoryBundle | null {
   return read<Queues>(QUEUE_KEY)?.[userId] ?? null;
 }
 
-export function addToQueue(userId: string, change: Partial<HistoryBundle>) {
-  setEntry(QUEUE_KEY, userId, combineBundles(readQueue(userId) ?? emptyBundle(), change));
+/** False when storage refused it. */
+export function addToQueue(userId: string, change: Partial<HistoryBundle>): boolean {
+  return setEntry(QUEUE_KEY, userId, combineBundles(readQueue(userId) ?? emptyBundle(), change));
 }
 
 /** Everything not yet confirmed by the account: changes in flight from any tab, then the queue. */
@@ -83,9 +86,10 @@ export function takeQueue(userId: string): HistoryBundle | null {
   const queued = readQueue(userId);
   if (!inflight && !queued) return null;
   const bundle = combineBundles(inflight ?? emptyBundle(), queued ?? {});
-  setEntry(INFLIGHT_KEY, userId, bundle);
+  // The queue is only removed once the flight is safely stored.
+  if (!setEntry(INFLIGHT_KEY, userId, bundle)) return null;
   setEntry(QUEUE_KEY, userId, null);
-  return read<Queues>(INFLIGHT_KEY)?.[userId] ?? null;
+  return bundle;
 }
 
 /**
@@ -102,11 +106,14 @@ export function finishInflight(userId: string, ok: boolean, sent: HistoryBundle 
   if (!ok && !isEmptyBundle(mine)) setEntry(QUEUE_KEY, userId, combineBundles(mine, readQueue(userId) ?? {}));
 }
 
-/** Apply a change to the account copy and queue it for upload. False when signed out. */
-export function queueChange(change: Partial<HistoryBundle>): boolean {
+/**
+ * Apply a change to the account copy and queue it for upload. Null when
+ * signed out; otherwise false when storage refused it (then nothing changes).
+ */
+export function queueChange(change: Partial<HistoryBundle>): boolean | null {
   const account = readAccount();
-  if (!account) return false;
-  addToQueue(account.userId, change);
+  if (!account) return null;
+  if (!addToQueue(account.userId, change)) return false;
   write(ACCOUNT_KEY, { ...account, history: mergeHistory(account.history, change) });
   fire(HISTORY_EVENT);
   fire(QUEUE_EVENT);

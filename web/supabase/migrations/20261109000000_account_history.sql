@@ -38,7 +38,9 @@ alter table public.history_puzzles enable row level security;
 alter table public.history_matches enable row level security;
 
 -- Only /api/history touches these tables, with the secret key. Players never
--- read or write them directly, so they get no grants and no policies.
+-- read or write them directly, so they get no policies. Supabase's default
+-- privileges still grant anon and authenticated access to new tables in
+-- public; 20261109100000_revoke_history_grants.sql takes those away.
 grant select, insert, update, delete on
   public.history_games, public.history_reviews, public.history_puzzles, public.history_matches
   to service_role;

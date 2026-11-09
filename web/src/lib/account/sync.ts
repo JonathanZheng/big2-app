@@ -6,6 +6,7 @@ import type { AuthChangeEvent } from "@supabase/supabase-js";
 import { OnlineError, onlineClient } from "@/lib/online/client";
 import { clearGuest, readGuestBundle } from "./guest";
 import { type AccountHistory, type HistoryBundle, emptyHistory, isEmptyBundle, mergeHistory, splitBundle } from "./merge";
+import { sendable } from "./validate";
 import { addToQueue, finishInflight, readAccount, readPending, readQueue, takeQueue, writeAccount } from "./store";
 
 /** A request /api/history answered with an error status. */
@@ -49,9 +50,10 @@ function show(userId: string, history: AccountHistory) {
 
 async function flushOnce(userId: string): Promise<boolean> {
   const bundle = takeQueue(userId);
+  const toSend = bundle && sendable(bundle);
   let history: AccountHistory | null = null;
   try {
-    for (const part of bundle && !isEmptyBundle(bundle) ? splitBundle(bundle) : []) {
+    for (const part of toSend && !isEmptyBundle(toSend) ? splitBundle(toSend) : []) {
       try {
         history = await callHistory({ action: "merge", bundle: part });
       } catch (error) {
@@ -70,19 +72,23 @@ async function flushOnce(userId: string): Promise<boolean> {
   return true;
 }
 
-let flight: Promise<boolean> | null = null;
+const flights = new Map<string, Promise<boolean>>();
 
-/** Send this account's queued changes (or just fetch its history). One flush runs at a time; changes queued meanwhile go next. */
+/** Send this account's queued changes (or just fetch its history). One flush per account runs at a time; changes queued meanwhile go next. */
 export function flushAccount(userId: string): Promise<boolean> {
-  flight ??= (async () => {
-    try {
-      let ok = await flushOnce(userId);
-      while (ok && readQueue(userId)) ok = await flushOnce(userId);
-      return ok;
-    } finally {
-      flight = null;
-    }
-  })();
+  let flight = flights.get(userId);
+  if (!flight) {
+    flight = (async () => {
+      try {
+        let ok = await flushOnce(userId);
+        while (ok && readQueue(userId)) ok = await flushOnce(userId);
+        return ok;
+      } finally {
+        flights.delete(userId);
+      }
+    })();
+    flights.set(userId, flight);
+  }
   return flight;
 }
 
@@ -90,14 +96,13 @@ export function flushAccount(userId: string): Promise<boolean> {
 export function syncAccount(userId: string): Promise<boolean> {
   const current = readAccount();
   if (current && current.userId !== userId) writeAccount(null);
+  // Guest data is cleared only once it is safely queued for this account.
   const guest = readGuestBundle();
-  if (guest) {
-    addToQueue(userId, guest);
-    clearGuest();
-  }
+  const handed = guest !== null && addToQueue(userId, guest);
+  if (handed) clearGuest();
   const account = readAccount();
   if (!account) writeAccount({ userId, history: mergeHistory(emptyHistory(), readQueue(userId) ?? {}) });
-  else if (guest) writeAccount({ userId, history: mergeHistory(account.history, guest) });
+  else if (handed) writeAccount({ userId, history: mergeHistory(account.history, guest) });
   return flushAccount(userId);
 }
 
@@ -126,10 +131,32 @@ export async function resetAccountHistory(): Promise<void> {
   show(userId, history);
 }
 
+/** How long SIGN OUT waits for the network at each step. */
+const SIGN_OUT_WAIT_MS = 3000;
+
+/** The promise's value, or "timeout" if it takes longer than `ms`. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Try to send what is queued, then sign out; anything unsent waits for this account's next sign-in. */
 export async function signOutAccount(): Promise<void> {
   const userId = readAccount()?.userId;
-  if (userId) await flushAccount(userId);
+  if (userId) await within(flushAccount(userId), SIGN_OUT_WAIT_MS);
   writeAccount(null);
-  await onlineClient()?.auth.signOut();
+  const auth = onlineClient()?.auth;
+  if (!auth) return;
+  const result = await within(auth.signOut(), SIGN_OUT_WAIT_MS);
+  // Offline with an expired token, signOut fails to refresh it and returns before removing the
+  // session, so this browser would stay signed in. Its storage key is removed here instead.
+  if (result === "timeout" || result.error) {
+    const key = (auth as unknown as { storageKey?: string }).storageKey;
+    try {
+      if (key) localStorage.removeItem(key);
+    } catch {
+      // Storage blocked: there is no stored session to remove.
+    }
+  }
 }

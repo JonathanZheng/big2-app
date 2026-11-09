@@ -26,6 +26,18 @@ function memoryStorage() {
   };
 }
 
+/** Storage that refuses to write one key, as when it is full. */
+function refusing(key: string) {
+  const storage = memoryStorage();
+  return {
+    ...storage,
+    setItem: (k: string, v: string) => {
+      if (k === key) throw new Error("QuotaExceededError");
+      storage.setItem(k, v);
+    },
+  };
+}
+
 let events: string[];
 
 beforeEach(() => {
@@ -41,8 +53,8 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("account store", () => {
-  it("queueChange without an account returns false and stores nothing", () => {
-    expect(queueChange({ games: [game(1)] })).toBe(false);
+  it("queueChange without an account returns null and stores nothing", () => {
+    expect(queueChange({ games: [game(1)] })).toBeNull();
     expect(readAccount()).toBeNull();
     expect(readQueue("a")).toBeNull();
   });
@@ -114,6 +126,19 @@ describe("account store", () => {
     expect(readPending("a")).toBeNull();
   });
 
+  it("reports when storage refuses a queued change", () => {
+    vi.stubGlobal("localStorage", refusing("big2.queue.v1"));
+    expect(addToQueue("a", { games: [game(1)] })).toBe(false);
+  });
+
+  it("leaves the queue in place when the flight cannot be stored", () => {
+    const storage = refusing("big2.inflight.v1");
+    vi.stubGlobal("localStorage", storage);
+    expect(addToQueue("a", { games: [game(1)] })).toBe(true);
+    expect(takeQueue("a")).toBeNull();
+    expect(readQueue("a")?.games.map((g) => g.at)).toEqual([1]);
+  });
+
   it("survives blocked storage", () => {
     vi.stubGlobal("localStorage", {
       getItem: () => { throw new Error("blocked"); },
@@ -121,7 +146,7 @@ describe("account store", () => {
       removeItem: () => { throw new Error("blocked"); },
     });
     expect(readAccount()).toBeNull();
-    expect(queueChange({ games: [game(1)] })).toBe(false);
+    expect(queueChange({ games: [game(1)] })).toBeNull();
     expect(() => writeAccount({ userId: "a", history: emptyHistory() })).not.toThrow();
     expect(() => addToQueue("a", { games: [game(1)] })).not.toThrow();
     expect(takeQueue("a")).toBeNull();

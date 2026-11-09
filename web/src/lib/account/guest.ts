@@ -3,7 +3,7 @@ import { clearGuestResults, readGuestResults } from "@/lib/puzzle/puzzle";
 import { clearProfile, readGuestGameRecords } from "@/lib/session/profile";
 import { clearGuestReviews, readGuestReviews } from "@/lib/session/saved-reviews";
 import { readGuestStats } from "@/lib/session/stats";
-import type { HistoryBundle } from "./merge";
+import { type HistoryBundle, newUploadId } from "./merge";
 
 /** The guest data, or null when there is none. Card colour is a display setting and stays. */
 export function readGuestBundle(): HistoryBundle | null {
@@ -17,7 +17,7 @@ export function readGuestBundle(): HistoryBundle | null {
     reviews,
     deletedReviews: [],
     puzzles,
-    matches: matches ? [{ id: crypto.randomUUID(), matches, matchWins }] : [],
+    matches: matches ? [{ id: newUploadId(), matches, matchWins }] : [],
   };
 }
 

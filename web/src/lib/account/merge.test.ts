@@ -140,14 +140,23 @@ describe("splitBundle", () => {
 });
 
 describe("historyChanges", () => {
+  it("ignores key order, as the database reorders stored keys", () => {
+    const reorder = (v: unknown): unknown => Array.isArray(v)
+      ? v.map(reorder)
+      : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, reorder(x)])) : v;
+    const stored = history({ games: [game(1, true)], reviews: [review("a", 1)], puzzles: { "2026-11-01": puzzle("Good") } });
+    const changes = historyChanges(reorder(stored) as AccountHistory, stored);
+    expect(changes.upsertGames).toEqual([]);
+    expect(changes.upsertReviews).toEqual([]);
+    expect(changes.upsertPuzzles).toEqual({});
+  });
+
   it("historyChanges lists only what changed", () => {
     const before = history({ games: [game(1), game(2), game(3)], reviews: [review("a", 1)] });
     const after = history({ games: [game(2), game(3, true)], reviews: [review("b", 2)], puzzles: { "2026-11-01": puzzle("Good") } });
     const changes = historyChanges(before, after);
     expect(changes.upsertGames.map((g) => g.at)).toEqual([3]);
-    expect(changes.deleteGames).toEqual([1]);
     expect(changes.upsertReviews.map((r) => r.id)).toEqual(["b"]);
-    expect(changes.deleteReviews).toEqual(["a"]);
     expect(Object.keys(changes.upsertPuzzles)).toEqual(["2026-11-01"]);
   });
 });

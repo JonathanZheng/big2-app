@@ -39,12 +39,15 @@ async function call(token: string | null, body: Record<string, unknown>) {
   return { status: response.status, body: (await response.json()) as { history: AccountHistory; error?: string } };
 }
 
+const analysis = { moves: 1, best: 1, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, passedInstead: 0, playedInstead: 0, otherPlay: 0 };
 const game = (at: number, analysed = false) => ({
   at, difficulty: "easy", won: true, cardsLeft: 0, plays: [0, 1], suits: [1, 0, 0, 0], hints: 0,
-  ...(analysed ? { analysis: { moves: 1, best: 1 } } : {}),
+  ...(analysed ? { analysis } : {}),
 });
 
-const review = { id: "r1", at: 5, title: "VS BOTS · EASY", final: {}, names: [], seats: [], youSeat: 0, players: [0], scoreAll: true };
+const final = { hands: [[], [], [], []], current: 0, firstMove: false, lastPlay: null, passes: 0, history: [], winner: 0 };
+const review = { id: "r1", at: 5, title: "VS BOTS · EASY", final, names: [], seats: [], youSeat: 0, players: [0], scoreAll: true };
+const puzzles = { "2026-11-01": { cards: [1], label: "Good" } };
 
 describe.skipIf(!APP)("account history", () => {
   it("requires sign-in", async () => {
@@ -88,6 +91,50 @@ describe.skipIf(!APP)("account history", () => {
     expect(Object.keys(body.history.puzzles)).toEqual(["2026-11-01"]);
   });
 
+  it("concurrent merges never drop a stored analysis", async () => {
+    const p = await player("race");
+    const ats = Array.from({ length: 20 }, (_, i) => i + 1);
+    await Promise.all(ats.flatMap((at) => [
+      call(p.token, { action: "merge", bundle: { games: [game(at, true)] } }),
+      call(p.token, { action: "merge", bundle: { games: [game(at)] } }),
+    ]));
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games.filter((g) => !g.analysis).map((g) => g.at)).toEqual([]);
+  });
+
+  it("concurrent merges keep the 500 game cap", async () => {
+    const p = await player("cap");
+    const games = (from: number) => Array.from({ length: 300 }, (_, i) => game(from + i));
+    await Promise.all([1, 1001, 2001].map((from) => call(p.token, { action: "merge", bundle: { games: games(from) } })));
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games).toHaveLength(500);
+  });
+
+  it("keeps the newest 50 reviews and applies deletions", async () => {
+    const p = await player("reviews");
+    const reviews = Array.from({ length: 50 }, (_, i) => ({ ...review, id: `r${i}`, at: i + 1 }));
+    await call(p.token, { action: "merge", bundle: { reviews } });
+    const added = await call(p.token, { action: "merge", bundle: { reviews: [{ ...review, id: "new", at: 100 }] } });
+    const ids = added.body.history.reviews.map((r) => r.id);
+    expect(ids).toHaveLength(50);
+    expect(ids[0]).toBe("new");
+    expect(ids).not.toContain("r0");
+    const deleted = await call(p.token, { action: "merge", bundle: { deletedReviews: ["r49"] } });
+    expect(deleted.body.history.reviews.map((r) => r.id)).not.toContain("r49");
+    expect(deleted.body.history.reviews).toHaveLength(49);
+  });
+
+  it("a match upload retried after a reset is still counted once", async () => {
+    const p = await player("retry");
+    const bundle = { matches: [{ id: "m1", matches: 2, matchWins: 1 }] };
+    await call(p.token, { action: "merge", bundle }); // committed, but the answer was lost
+    expect((await call(p.token, { action: "reset" })).body.history.matches).toBe(0);
+    const { body } = await call(p.token, { action: "merge", bundle });
+    expect([body.history.matches, body.history.matchWins]).toEqual([0, 0]);
+    await call(p.token, { action: "merge", bundle: { matches: [{ id: "m2", matches: 1, matchWins: 1 }] } });
+    expect((await call(p.token, { action: "load" })).body.history.matches).toBe(1);
+  });
+
   it("players cannot read the tables directly", async () => {
     const p = await player("direct");
     await call(p.token, { action: "merge", bundle: { games: [game(1)] } });
@@ -95,9 +142,53 @@ describe.skipIf(!APP)("account history", () => {
     expect(error !== null || (data ?? []).length === 0).toBe(true);
   });
 
+  it("counts every match upload past the 1000 rows one read returns", async () => {
+    const p = await player("totals");
+    for (let part = 0; part < 3; part++) {
+      const matches = Array.from({ length: 400 }, (_, i) => ({ id: `m${part}-${i}`, matches: 1, matchWins: i % 2 }));
+      expect((await call(p.token, { action: "merge", bundle: { matches } })).status).toBe(200);
+    }
+    const { body } = await call(p.token, { action: "load" });
+    expect([body.history.matches, body.history.matchWins]).toEqual([1200, 600]);
+    const direct = await p.db.rpc("history_match_totals", { p_user: "00000000-0000-0000-0000-000000000000" });
+    expect(direct.error?.code).toBe("42501");
+  });
+
+  it("signed-in and signed-out visitors have no grants on the tables", async () => {
+    const p = await player("grants");
+    const anon = createClient(URL, PUBLISHABLE, { auth: { persistSession: false } });
+    for (const table of ["history_games", "history_reviews", "history_puzzles", "history_matches"]) {
+      for (const db of [anon, p.db]) {
+        const { error } = await db.from(table).select().limit(1);
+        expect(error?.code, table).toBe("42501");
+      }
+    }
+  });
+
   it("rejects a malformed bundle", async () => {
     const p = await player("bad");
     const { status } = await call(p.token, { action: "merge", bundle: { games: "lots" } });
     expect(status).toBe(400);
+  });
+
+  it("a bundle with one bad record writes nothing", async () => {
+    const p = await player("atomic");
+    const { status } = await call(p.token, { action: "merge", bundle: { games: [game(1), game(1.5)], reviews: [review], puzzles } });
+    expect(status).toBe(400);
+    const { body } = await call(p.token, { action: "load" });
+    expect([body.history.games, body.history.reviews, body.history.puzzles]).toEqual([[], [], {}]);
+  });
+
+  it("rejects a game record missing the fields the profile reads", async () => {
+    const p = await player("fields");
+    expect((await call(p.token, { action: "merge", bundle: { games: [{ at: 5 }] } })).status).toBe(400);
+    const { body } = await call(p.token, { action: "load" });
+    expect(body.history.games).toEqual([]);
+  });
+
+  it("refuses a request that is too large", async () => {
+    const p = await player("large");
+    const { status } = await call(p.token, { action: "merge", bundle: { games: [{ ...game(1), note: "x".repeat(2_000_000) }] } });
+    expect(status).toBe(413);
   });
 });

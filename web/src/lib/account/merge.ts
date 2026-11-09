@@ -30,6 +30,12 @@ export interface MatchUpload {
   matchWins: number;
 }
 
+/** A unique id for a match upload. crypto.randomUUID is missing outside secure contexts (plain http on a LAN) and in older Safari. */
+export function newUploadId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 /** Changes on their way to the account. */
 export interface HistoryBundle {
   games: GameRecord[];
@@ -41,9 +47,7 @@ export interface HistoryBundle {
 
 export interface HistoryChanges {
   upsertGames: GameRecord[];
-  deleteGames: number[];
   upsertReviews: SavedReview[];
-  deleteReviews: string[];
   upsertPuzzles: Record<string, PuzzleResult>;
 }
 
@@ -121,7 +125,14 @@ export function combineBundles(earlier: HistoryBundle, later: Partial<HistoryBun
   };
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** JSON with object keys sorted, so two values compare equal whatever order their keys are in (jsonb reorders them). */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => (v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    : v));
+}
+
+const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
 
 /** The parts of `bundle` that are (or with `inOther` false, are not) exactly the same in `other`. */
 export function bundleOverlap(bundle: HistoryBundle, other: HistoryBundle, inOther: boolean): HistoryBundle {
@@ -157,17 +168,13 @@ export function splitBundle(bundle: HistoryBundle): HistoryBundle[] {
   }));
 }
 
-/** The rows that must be written to turn `before` into `after`. */
+/** The rows that must be written to turn `before` into `after`. Deletions and trimming to the caps happen in the database. */
 export function historyChanges(before: AccountHistory, after: AccountHistory): HistoryChanges {
   const oldGames = new Map(before.games.map((g) => [g.at, g]));
-  const newGames = new Set(after.games.map((g) => g.at));
   const oldReviews = new Map(before.reviews.map((r) => [r.id, r]));
-  const newReviews = new Set(after.reviews.map((r) => r.id));
   return {
     upsertGames: after.games.filter((g) => !same(oldGames.get(g.at), g)),
-    deleteGames: before.games.filter((g) => !newGames.has(g.at)).map((g) => g.at),
     upsertReviews: after.reviews.filter((r) => !same(oldReviews.get(r.id), r)),
-    deleteReviews: before.reviews.filter((r) => !newReviews.has(r.id)).map((r) => r.id),
     upsertPuzzles: Object.fromEntries(Object.entries(after.puzzles).filter(([day, p]) => !same(before.puzzles[day], p))),
   };
 }
