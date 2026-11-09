@@ -11,7 +11,8 @@ import { parseBundle } from "./validate";
 
 const auth = vi.hoisted(() => ({
   getSession: async () => ({ data: { session: { access_token: "t", user: { id: "a" } } } }),
-  signOut: vi.fn(async () => ({ error: null })),
+  signOut: vi.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
+  storageKey: "sb-test-auth-token",
 }));
 
 vi.mock("@/lib/online/client", async (importOriginal) => {
@@ -48,7 +49,8 @@ beforeEach(() => {
   vi.stubGlobal("navigator", { onLine: true });
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
-  auth.signOut.mockClear();
+  auth.signOut.mockReset();
+  auth.signOut.mockImplementation(async () => ({ error: null }));
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -299,5 +301,50 @@ describe("signOutAccount", () => {
     await signOutAccount();
     expect(readAccount()).toBeNull();
     expect(readQueue("a")?.games.map((g) => g.at)).toEqual([4]);
+  });
+
+  it("does not wait forever for an unanswered flush", async () => {
+    vi.useFakeTimers();
+    try {
+      writeAccount({ userId: "a", history: emptyHistory() });
+      queueChange({ games: [game(4)] });
+      let answer: (r: Response) => void = () => undefined;
+      fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { answer = resolve; }));
+      let done = false;
+      void signOutAccount().then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(done).toBe(true);
+      expect(readAccount()).toBeNull();
+      expect(auth.signOut).toHaveBeenCalled();
+      answer(reply(emptyHistory())); // let the flush end so later tests start clean
+      await flushAccount("a");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("removes the local session when Supabase cannot sign out offline", async () => {
+    localStorage.setItem("sb-test-auth-token", "{}");
+    writeAccount({ userId: "a", history: emptyHistory() });
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    auth.signOut.mockImplementation(async () => ({ error: new Error("Failed to fetch") }));
+    await signOutAccount();
+    expect(localStorage.getItem("sb-test-auth-token")).toBeNull();
+  });
+
+  it("removes the local session when Supabase never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.setItem("sb-test-auth-token", "{}");
+      fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+      auth.signOut.mockImplementation(() => new Promise(() => undefined));
+      let done = false;
+      void signOutAccount().then(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(done).toBe(true);
+      expect(localStorage.getItem("sb-test-auth-token")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

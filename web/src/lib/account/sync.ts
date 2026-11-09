@@ -131,10 +131,32 @@ export async function resetAccountHistory(): Promise<void> {
   show(userId, history);
 }
 
+/** How long SIGN OUT waits for the network at each step. */
+const SIGN_OUT_WAIT_MS = 3000;
+
+/** The promise's value, or "timeout" if it takes longer than `ms`. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /** Try to send what is queued, then sign out; anything unsent waits for this account's next sign-in. */
 export async function signOutAccount(): Promise<void> {
   const userId = readAccount()?.userId;
-  if (userId) await flushAccount(userId);
+  if (userId) await within(flushAccount(userId), SIGN_OUT_WAIT_MS);
   writeAccount(null);
-  await onlineClient()?.auth.signOut();
+  const auth = onlineClient()?.auth;
+  if (!auth) return;
+  const result = await within(auth.signOut(), SIGN_OUT_WAIT_MS);
+  // Offline with an expired token, signOut fails to refresh it and returns before removing the
+  // session, so this browser would stay signed in. Its storage key is removed here instead.
+  if (result === "timeout" || result.error) {
+    const key = (auth as unknown as { storageKey?: string }).storageKey;
+    try {
+      if (key) localStorage.removeItem(key);
+    } catch {
+      // Storage blocked: there is no stored session to remove.
+    }
+  }
 }
