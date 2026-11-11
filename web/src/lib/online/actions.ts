@@ -71,13 +71,21 @@ export async function joinRoom(user: User, code: string) {
   const loaded = await loadRoom(room.id);
   if (loaded.seats.some((s) => s.userId === user.id)) return { id: room.id };
   if (room.status !== "lobby") throw new HttpError(409, "That game has already started.");
-  const free = loaded.seats.find((s) => s.userId === null);
-  if (!free) throw new HttpError(409, "That room is full.");
-  const updated = check(await admin().from("room_seats")
-    .update({ user_id: user.id, display_name: await displayName(user), last_seen: new Date().toISOString() })
-    .eq("room_id", room.id).eq("seat", free.seat).is("user_id", null).select("seat")) as unknown[];
-  if (updated.length === 0) throw new HttpError(409, "Someone took that seat first. Try again.");
-  return { id: room.id };
+  const name = await displayName(user);
+  // Friends joining together race for seats: on losing one, try the next.
+  // A seat a bot was given at the start is not free.
+  for (const free of loaded.seats.filter((s) => s.userId === null)) {
+    const { data, error } = await admin().from("room_seats")
+      .update({ user_id: user.id, display_name: name, last_seen: new Date().toISOString() })
+      .eq("room_id", room.id).eq("seat", free.seat).is("user_id", null).eq("bot", false).select("seat");
+    if (error?.code === "23505") return { id: room.id }; // their other tab sat down first
+    if (error) throw new HttpError(500, error.message);
+    if (data.length > 0) return { id: room.id };
+  }
+  const seated = check(await admin().from("room_seats").select("seat")
+    .eq("room_id", room.id).eq("user_id", user.id)) as unknown[];
+  if (seated.length > 0) return { id: room.id };
+  throw new HttpError(409, "That room is full.");
 }
 
 /** Bots move, the timer is set, and a finished game is scored, then everything is saved. */

@@ -73,10 +73,7 @@ async function expectConsistentDeal(roomId: string) {
 }
 
 describe.skipIf(!APP)("online play under concurrent requests", () => {
-  // Known bug, fixed in a follow-up: every racer aims at the same first free
-  // seat, so one gets in and the rest are told to try again while seats are
-  // still free. Change it.fails back to it once joinRoom tries the next seat.
-  it.fails("eight players racing for three free seats: three get in, each in their own seat", async () => {
+  it("eight players racing for three free seats: three get in, each in their own seat", async () => {
     const host = await player("host");
     const racers = await Promise.all(Array.from({ length: 8 }, (_, i) => player(`racer${i}`)));
     const { id, code } = await newRoom(host);
@@ -90,12 +87,12 @@ describe.skipIf(!APP)("online play under concurrent requests", () => {
     expect(joined.sort()).toEqual(users.slice(1).sort());
   });
 
-  it("one player joining from several tabs at once takes one seat and never sees a server error", async () => {
+  it("one player joining from several tabs at once takes one seat, and every tab gets in", async () => {
     const host = await player("host");
     const guest = await player("tabs");
     const { id, code } = await newRoom(host);
     const results = await Promise.all(Array.from({ length: 5 }, () => call(guest, "join", { code })));
-    expect(results.every((r) => r.status < 500)).toBe(true);
+    expect(statuses(results)).toEqual([200, 200, 200, 200, 200]);
     const mine = (await adminDb().from("room_seats").select("seat").eq("room_id", id).eq("user_id", guest.id)).data!;
     expect(mine).toHaveLength(1);
   });
