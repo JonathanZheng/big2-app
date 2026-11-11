@@ -97,10 +97,7 @@ describe.skipIf(!APP)("online play under concurrent requests", () => {
     expect(mine).toHaveLength(1);
   });
 
-  // Known bug, fixed in a follow-up: startRoom never claims the lobby, so every
-  // press deals a new game. Change it.fails back to it once only one press can
-  // start the room.
-  it.fails("the host pressing start several times at once deals one game", async () => {
+  it("the host pressing start several times at once deals one game", async () => {
     const host = await player("host");
     const guest = await player("guest");
     const { id, code } = await newRoom(host);

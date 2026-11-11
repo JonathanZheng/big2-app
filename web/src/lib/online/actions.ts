@@ -117,21 +117,21 @@ async function finishGame(loaded: LoadedRoom, winner: number) {
 }
 
 export async function startRoom(user: User, roomId: string) {
-  const loaded = await loadRoom(roomId);
-  requireHost(loaded, user);
-  if (loaded.room.status !== "lobby") throw new HttpError(409, "The game has already started.");
-  // Empty seats become bots.
+  requireHost(await loadRoom(roomId), user);
+  // Claim the lobby first, so only one press of START deals.
+  const claimed = check(await admin().from("rooms").update({ status: "playing" })
+    .eq("id", roomId).eq("status", "lobby").select("id")) as unknown[];
+  if (claimed.length === 0) throw new HttpError(409, "The game has already started.");
+  // Empty seats become bots. Someone may still sit down in one first.
+  const seats = (await loadRoom(roomId)).seats;
   let botNumber = 0;
-  for (const s of loaded.seats) {
+  for (const s of seats) {
     if (s.userId !== null) continue;
     botNumber += 1;
-    s.bot = true;
-    s.displayName = `Bot ${botNumber}`;
-    check(await admin().from("room_seats").update({ bot: true, display_name: s.displayName })
-      .eq("room_id", roomId).eq("seat", s.seat));
+    check(await admin().from("room_seats").update({ bot: true, display_name: `Bot ${botNumber}` })
+      .eq("room_id", roomId).eq("seat", s.seat).is("user_id", null));
   }
-  check(await admin().from("rooms").update({ status: "playing" }).eq("id", roomId));
-  await advance(loaded, deal(rng), null);
+  await advance(await loadRoom(roomId), deal(rng), null);
 }
 
 export async function nextRoomGame(user: User, roomId: string) {
