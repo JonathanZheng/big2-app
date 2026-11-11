@@ -34,10 +34,42 @@ jobs:
         run: npm run lint
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Test
         run: npm test
 
       - name: Build
         run: npm run build
+
+  integration:
+    name: Integration and concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/local-stack
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: Short concurrency run
+        run: k6 run --summary-export "$RUNNER_TEMP/concurrency.json" load/concurrency.js
+        env:
+          VUS: 10
+          HOLD: 30s
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-logs
+          path: |
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/concurrency.json
+          if-no-files-found: ignore

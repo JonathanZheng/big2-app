@@ -1,0 +1,49 @@
+name: Local stack
+description: Starts a local Supabase with every migration applied, then builds and serves the web app against it on port 3123.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+
+    - uses: supabase/setup-cli@v1
+      with:
+        version: latest
+
+    - name: Install
+      shell: bash
+      working-directory: web
+      run: npm ci
+
+    - name: Start Supabase
+      shell: bash
+      working-directory: web
+      run: |
+        supabase start -x studio,imgproxy,storage-api,edge-runtime,logflare,vector,supavisor,postgres-meta
+        eval "$(supabase status -o env)"
+        {
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+          echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+          echo "SUPABASE_URL=$API_URL"
+          echo "SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+          echo "APP=http://localhost:3123"
+          echo "ONLINE_TEST_APP=http://localhost:3123"
+        } >> "$GITHUB_ENV"
+
+    - name: Build and serve the app
+      shell: bash
+      working-directory: web
+      run: |
+        npm run build
+        nohup npm start -- -p 3123 > "$RUNNER_TEMP/app.log" 2>&1 &
+        for _ in $(seq 60); do
+          curl -sf http://localhost:3123 > /dev/null && exit 0
+          sleep 1
+        done
+        cat "$RUNNER_TEMP/app.log"
+        exit 1
