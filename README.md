@@ -1,5 +1,8 @@
 # big2-app
 
+[![CI](https://github.com/JonathanZheng/big2-app/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JonathanZheng/big2-app/actions/workflows/ci.yml)
+[![Nightly](https://github.com/JonathanZheng/big2-app/actions/workflows/nightly.yml/badge.svg)](https://github.com/JonathanZheng/big2-app/actions/workflows/nightly.yml)
+
 A Big 2 bot trained by self-play, and a web app to play against it, play with friends, and get move suggestions for a real game. The bot is small enough to run in the browser.
 
 The web app in `web/` has playable vs bots, one-device vs friends, Best move and game review modes. Online rooms, accounts, daily puzzles and offline play are also available; new account sign-ups are currently paused. See `web/README.md` for running and deploying it.
