@@ -1,0 +1,98 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 in Singapore
+  workflow_dispatch:
+    inputs:
+      soak:
+        description: How long the soak runs, in whole minutes (under 60m)
+        default: 30m
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Regression (unit and integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/local-stack
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # ONLINE_TEST_APP is set by the local stack, so this runs every test,
+      # integration included.
+      - name: Every test
+        run: npm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-app-log
+          path: ${{ runner.temp }}/app.log
+          if-no-files-found: ignore
+
+  load:
+    name: Load (${{ matrix.test }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        test: [concurrency, spike, soak]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/local-stack
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: k6 ${{ matrix.test }}
+        run: k6 run --summary-export "$RUNNER_TEMP/${{ matrix.test }}.json" load/${{ matrix.test }}.js
+        env:
+          SOAK: ${{ inputs.soak || '30m' }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-${{ matrix.test }}
+          path: |
+            ${{ runner.temp }}/app.log
+            ${{ runner.temp }}/${{ matrix.test }}.json
+          if-no-files-found: ignore
+
+  report:
+    name: Report a failure
+    needs: [regression, load]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the nightly issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly tests failing"
+          issue=$(gh issue list --state open --search "in:title \"$title\"" --json number -q '.[0].number')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "Failed again: $RUN"
+          else
+            gh issue create --title "$title" --body "The nightly regression or load tests failed: $RUN"
+          fi
