@@ -122,7 +122,8 @@ describe.skipIf(!APP)("online play under concurrent requests", () => {
       hands: held, current: seat, firstMove: before.first_move, lastPlay: before.last_play,
       passes: before.passes, history: before.history, winner: before.winner,
     };
-    const move = legalMoves(state, seat).find((m) => m.length > 0)!;
+    // Play cards if possible. When the bots opened with something unbeatable, passing is the only move.
+    const move = legalMoves(state, seat).find((m) => m.length > 0) ?? [];
     const results = await Promise.all(Array.from({ length: 5 }, () => call(mover, "move", { roomId: id, cards: move })));
     expect(statuses(results)).toEqual([200, 409, 409, 409, 409]);
     const after = await game(id);
