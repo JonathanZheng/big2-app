@@ -230,3 +230,6 @@ checkpoints/
 
 # Supabase CLI link state from running it at the repo root (the project lives in web/)
 /supabase/.temp/
+
+# graphify knowledge graph (local, contains absolute paths)
+graphify-out/
