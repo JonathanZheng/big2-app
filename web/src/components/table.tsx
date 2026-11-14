@@ -1,5 +1,5 @@
 import { CardFace, CardRow } from "@/components/card";
-import type { Card } from "@/lib/engine/cards";
+import { type Card, rank, suit } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { SEAT_NAMES } from "@/lib/session/match";
 
@@ -22,6 +22,27 @@ function lastPlayIndex(game: GameState): number {
   return -1;
 }
 
+const SPOKEN_RANKS = ["3", "4", "5", "6", "7", "8", "9", "10", "jack", "queen", "king", "ace", "2"];
+const SPOKEN_SUITS = ["diamonds", "clubs", "hearts", "spades"];
+
+/**
+ * One sentence for screen readers about the latest event at the table, such as
+ * "West plays 9 of hearts, 9 of spades. Your turn." Motion is never the only signal.
+ */
+export function announce(game: GameState, names: string[], youSeat: number): string {
+  const said = (seat: number, verb: string) =>
+    seat === youSeat ? `You ${verb}` : `${names[seat]} ${verb}s`;
+  const last = game.history.at(-1);
+  const event = !last
+    ? ""
+    : last.cards.length === 0
+      ? `${said(last.player, "pass")}. `
+      : `${said(last.player, "play")} ${last.cards.map((c) => `${SPOKEN_RANKS[rank(c)]} of ${SPOKEN_SUITS[suit(c)]}`).join(", ")}. `;
+  if (game.winner !== null) return `${event}${game.winner === youSeat ? "You win." : `${names[game.winner]} wins.`}`;
+  const lead = game.lastPlay ? "" : "New trick. ";
+  return `${event}${lead}${game.current === youSeat ? "Your turn." : `${names[game.current]} to play.`}`;
+}
+
 /**
  * The seats and the trick in the middle. Vs bots shows the three opponents;
  * one-device games show all four seats.
@@ -40,6 +61,7 @@ export function Table({ game, thinking, names = SEAT_NAMES, seats = [1, 2, 3], y
   const cleared = !game.lastPlay && trickIndex >= 0 ? game.history[trickIndex] : null;
   return (
     <div className="flex flex-col gap-4">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">{announce(game, names, youSeat)}</p>
       <div className={`grid gap-2 sm:gap-4 ${seats.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
         {seats.map((seat) => {
           const turn = game.winner === null && game.current === seat;
