@@ -22,6 +22,8 @@ interface HandProps {
   playable: Set<Card>;
   /** Cards kept together; drawn with a gap around each group. */
   groups: Card[][];
+  /** Set when a play was refused; the selected cards shake once per new value. */
+  refused?: number;
   disabled?: boolean;
   onToggle: (card: Card) => void;
   /** Sliding a finger or pointer across cards selects exactly those cards. */
@@ -34,7 +36,7 @@ interface HandProps {
  * selects them; holding a card for a moment picks it up to drag. Arrow keys
  * move between cards and Space toggles.
  */
-export function Hand({ order, selected, playable, groups, disabled, onToggle, onSlideSelect, onReorder }: HandProps) {
+export function Hand({ order, selected, playable, groups, refused, disabled, onToggle, onSlideSelect, onReorder }: HandProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: HOLD_MS, tolerance: SLIDE_PX } }),
   );
@@ -171,6 +173,7 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
               selected={selected.includes(card)}
               dimmed={!playable.has(card)}
               offset={offsets[i]}
+              refused={selected.includes(card) ? refused : undefined}
               disabled={disabled}
               onClick={() => {
                 if (suppressClick.current) return void (suppressClick.current = false);
@@ -193,8 +196,8 @@ function cardAt(x: number, y: number): Card | null {
   return el ? Number(el.dataset.card) : null;
 }
 
-function HandCard({ card, selected, dimmed, offset, disabled, onClick }: {
-  card: Card; selected: boolean; dimmed: boolean; offset: number; disabled?: boolean; onClick: () => void;
+function HandCard({ card, selected, dimmed, offset, refused, disabled, onClick }: {
+  card: Card; selected: boolean; dimmed: boolean; offset: number; refused?: number; disabled?: boolean; onClick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card, disabled });
   return (
@@ -215,15 +218,19 @@ function HandCard({ card, selected, dimmed, offset, disabled, onClick }: {
         zIndex: isDragging ? 50 : undefined,
       }}
       // A raised card moves with `translate`, which does not change the layout,
-      // so selecting never shifts the other cards.
-      className={`relative shrink-0 text-left transition-[translate] ${selected ? "-translate-y-6" : ""}`}
+      // so selecting never shifts the other cards. With reduced motion, cards
+      // move straight to their place, dnd-kit's sorting transition included.
+      className={`relative shrink-0 text-left motion-safe:transition-[translate] motion-reduce:transition-none! ${selected ? "-translate-y-6" : ""}`}
     >
-      <CardFace
-        card={card}
-        selected={selected}
-        dimmed={dimmed}
-        className="w-13 h-20 sm:w-16 sm:h-24 shadow-brutal-sm"
-      />
+      {/* Keyed by the refusal, so each refused PLAY shakes the selection once. */}
+      <span key={refused} className={`block ${refused ? "motion-safe:animate-[shake_180ms_linear]" : ""}`}>
+        <CardFace
+          card={card}
+          selected={selected}
+          dimmed={dimmed}
+          className="w-13 h-20 sm:w-16 sm:h-24 shadow-brutal-sm"
+        />
+      </span>
     </button>
   );
 }

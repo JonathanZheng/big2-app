@@ -11,6 +11,7 @@ import { type Difficulty, botMove } from "@/lib/bots/bots";
 import { smartMove } from "@/lib/bots/smart";
 import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
+import { whyIllegal } from "@/lib/engine/explain";
 import { legalMoves } from "@/lib/engine/legal";
 import {
   type SortMode, comboAnchor, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand,
@@ -295,6 +296,9 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const [reviewing, setReviewing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
   const [leaving, setLeaving] = useState<"restart" | "exit" | null>(null);
+  // An illegal PLAY is accepted as an attempt and explained. The reason belongs
+  // to the selection it was given for and disappears once the selection changes.
+  const [refusal, setRefusal] = useState<{ cards: Card[]; reason: string; at: number } | null>(null);
 
   const game = match.game;
   const handSeat = friends
@@ -398,10 +402,14 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   }, [friends]);
 
   const play = useCallback(() => {
+    if (myTurn && selected.length > 0 && !canPlay) {
+      setRefusal({ cards: selected, reason: whyIllegal(game, selected, names), at: Date.now() });
+      return;
+    }
     if (!canPlay) return;
     setMatch((m) => playMove(m, selected));
     finishTurn();
-  }, [canPlay, finishTurn, selected]);
+  }, [canPlay, finishTurn, game, myTurn, names, selected]);
 
   const pass = useCallback(() => {
     if (!canPass) return;
@@ -516,6 +524,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
       ? <AdvicePanel status={advice} onPick={(cards) => setSelected(cards)} />
       : <HistoryPanel game={game} names={names} hand={hand} />;
 
+  const refused = refusal && refusal.cards === selected ? refusal : null;
   const handoff = friends && game.winner === null && humans.includes(game.current) && viewer !== game.current;
   const scoreboard = match.wins.map((wins, seat) => `${shortName(names[seat])} ${wins}`).join("  ");
   const difficultyLabel = friends && humans.length === 4 ? "NO BOTS" : match.config.difficulty.toUpperCase();
@@ -572,6 +581,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
               selected={selected}
               playable={myTurn ? playable : new Set(hand)}
               groups={groups}
+              refused={refused?.at}
               onToggle={toggle}
               onSlideSelect={setSelected}
               onReorder={(o) => {
@@ -606,7 +616,13 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
 
           {/* Below 1024px the turn actions stay pinned to the bottom of the screen, within thumb reach. */}
           <div className="grid grid-cols-[3fr_3fr_2fr_2fr] sm:grid-cols-4 gap-3 max-lg:sticky max-lg:bottom-0 max-lg:z-30 max-lg:-mx-4 sm:max-lg:-mx-10 max-lg:px-4 sm:max-lg:px-10 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:bg-paper max-lg:border-t-3 max-lg:border-ink">
-            <button type="button" onClick={play} disabled={!canPlay}
+            {refused && (
+              <p role="status" key={refused.at}
+                className="col-span-full bg-ink text-paper px-3 py-2 font-mono text-xs sm:text-sm motion-safe:animate-[reveal_220ms_cubic-bezier(0.16,1,0.3,1)]">
+                {refused.reason}
+              </p>
+            )}
+            <button type="button" onClick={play} disabled={!myTurn || selected.length === 0}
               className={`${button} ${action} bg-accent`}>PLAY</button>
             <button type="button" onClick={pass} disabled={!canPass}
               className={`${button} ${action} bg-card`}>PASS</button>

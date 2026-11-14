@@ -103,6 +103,11 @@ body {
   60% { scale: 0.96 1.04; opacity: 1; }
   100% { scale: 1; }
 }
+/* Selected cards refusing a play: three quick 4px shakes. */
+@keyframes shake {
+  17%, 50%, 83% { translate: -4px 0; }
+  33%, 67% { translate: 4px 0; }
+}
 /* An overlay fading in behind its dialog. */
 @keyframes fade {
   from { opacity: 0; }
@@ -116,6 +121,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The press still flattens into the shadow, just without travel. */
   :is(a, button).shadow-brutal,
   :is(a, button).shadow-brutal-sm {
     transition: none;
