@@ -11,6 +11,9 @@ import { groupBreaks, handOffsets } from "@/lib/hand/layout";
 
 const HOLD_MS = 250;
 const SLIDE_PX = 8;
+/** Sweep timing from the big2-motion skill, for cards closing up or reordering. */
+const CLOSE_MS = 300;
+const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 interface HandProps {
   order: Card[];
@@ -56,6 +59,34 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   }, []);
   const offsets = handOffsets(order.length, size.width, size.card, groupBreaks(order, groups));
 
+  // FLIP: after each render, a card whose place in the row changed slides from
+  // its old place to its new one, so the hand closes up after a play and a sort
+  // can be followed by eye. Drags animate themselves, and a resize just snaps.
+  const dragging = useRef(false);
+  const lefts = useRef<{ width: number; at: Map<Card, number> }>({ width: 0, at: new Map() });
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const before = lefts.current;
+    const animate = before.width === size.width && !dragging.current
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const at = new Map<Card, number>();
+    for (const button of el.querySelectorAll<HTMLElement>("button[data-card]")) {
+      const card = Number(button.dataset.card);
+      // offsetLeft is the layout position, unaffected by running animations.
+      const left = button.offsetLeft;
+      at.set(card, left);
+      const from = before.at.get(card);
+      if (animate && from !== undefined && from !== left) {
+        button.animate(
+          [{ transform: `translateX(${from - left}px)` }, { transform: "none" }],
+          { duration: CLOSE_MS, easing: EASE_OUT, composite: "add" },
+        );
+      }
+    }
+    lefts.current = { width: size.width, at };
+  });
+
   function onPointerDown(e: React.PointerEvent) {
     // Keep receiving the release even when the pointer leaves the hand. The
     // capture goes on the card so dnd-kit's listeners still see the events.
@@ -100,6 +131,9 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   }
 
   function onDragEnd({ active, over }: DragEndEvent) {
+    // The dropped order is already on screen through dnd-kit's own transforms,
+    // so the render that commits it must not slide anything again.
+    requestAnimationFrame(() => { dragging.current = false; });
     if (!over || active.id === over.id) return;
     onReorder(arrayMove(order, order.indexOf(Number(active.id)), order.indexOf(Number(over.id))));
   }
@@ -114,7 +148,10 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={() => { dragging.current = true; }}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => { dragging.current = false; }}>
       <SortableContext items={order} strategy={horizontalListSortingStrategy}>
         <div
           ref={row}
