@@ -595,18 +595,19 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
               disabled={!undoOrder || handSeat === null} className={`${button} px-3 py-2 min-h-11 bg-card`}>UNDO</button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Below 1024px the turn actions stay pinned to the bottom of the screen, within thumb reach. */}
+          <div className="grid grid-cols-[3fr_3fr_2fr_2fr] sm:grid-cols-4 gap-3 max-lg:sticky max-lg:bottom-0 max-lg:z-30 max-lg:-mx-4 sm:max-lg:-mx-10 max-lg:px-4 sm:max-lg:px-10 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:bg-paper max-lg:border-t-3 max-lg:border-ink">
             <button type="button" onClick={play} disabled={!canPlay}
               className={`${button} ${action} bg-accent`}>PLAY</button>
             <button type="button" onClick={pass} disabled={!canPass}
               className={`${button} ${action} bg-card`}>PASS</button>
             <button type="button" onClick={cycleCombos} disabled={!myTurn}
-              className={`${button} ${action} bg-card`}>COMBOS</button>
+              className={`${button} ${action} max-sm:text-xs bg-card`}>COMBOS</button>
             <button type="button" onClick={() => { void hint(); if (!isWide()) setSheet("advice"); }} disabled={!myTurn}
-              className={`${button} ${action} bg-card`}>HINT</button>
-            <button type="button" onClick={() => setSheet("history")}
-              className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden col-span-2 sm:col-span-4`}>HISTORY</button>
+              className={`${button} ${action} max-sm:text-xs bg-card`}>HINT</button>
           </div>
+          <button type="button" onClick={() => setSheet("history")}
+            className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden`}>HISTORY</button>
         </div>
 
         <aside className="hidden lg:flex flex-col border-3 border-ink bg-card shadow-brutal self-start max-h-[calc(100vh-180px)]">
