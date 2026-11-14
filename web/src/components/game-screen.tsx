@@ -5,11 +5,13 @@ import { AdvicePanel, type AdviceStatus } from "@/components/advice-panel";
 import { Hand } from "@/components/hand";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReviewPanel } from "@/components/review-panel";
+import { CardFace } from "@/components/card";
 import { Table } from "@/components/table";
 import { type Difficulty, botMove } from "@/lib/bots/bots";
 import { smartMove } from "@/lib/bots/smart";
 import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
+import { whyIllegal } from "@/lib/engine/explain";
 import { legalMoves } from "@/lib/engine/legal";
 import {
   type SortMode, comboAnchor, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand,
@@ -28,6 +30,8 @@ import { recordGame, recordMatch } from "@/lib/session/stats";
 type ModelStatus = "loading" | "ready" | "failed";
 type Speed = "slow" | "normal" | "fast";
 const BOT_DELAY: Record<Speed, number> = { slow: 1200, normal: 700, fast: 250 };
+/** The beat between the last card landing and the result appearing (big2-motion skill). */
+const RESULT_BEAT_MS = 600;
 const MODEL_FAILED = "Model failed to load. Easy and Medium still work.";
 const key = (cards: Card[]) => [...cards].sort((a, b) => a - b).join(",");
 
@@ -289,10 +293,12 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const [tab, setTab] = useState<"advice" | "history">("advice");
   const [sheet, setSheet] = useState<"advice" | "history" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [thinking, setThinking] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
   const [leaving, setLeaving] = useState<"restart" | "exit" | null>(null);
+  // An illegal PLAY is accepted as an attempt and explained. The reason belongs
+  // to the selection it was given for and disappears once the selection changes.
+  const [refusal, setRefusal] = useState<{ cards: Card[]; reason: string; at: number } | null>(null);
 
   const game = match.game;
   const handSeat = friends
@@ -315,14 +321,14 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
     [baseOrder, hand, handSeat],
   );
 
-  // Bots take their turns after a short delay.
+  // Bots take their turns after a short delay. The seat shows THINKING for the
+  // whole turn, delay included, so a bot turn is never silent.
   // Bots wait while the restart or exit question is open.
   const botTurn = game.winner === null && isBotSeat(config, game.current) && leaving === null;
   useEffect(() => {
     if (!botTurn) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
-      setThinking(true);
       let move: Card[];
       try {
         move = await botMove(config.difficulty, game, game.current, getClient());
@@ -331,14 +337,11 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         move = smartMove(game, game.current);
       }
       if (cancelled) return;
-      setThinking(false);
       setMatch((m) => (m.game === game ? playMove(m, move) : m));
     }, BOT_DELAY[speed]);
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      // A cancelled turn must not leave the seat saying THINKING.
-      setThinking(false);
     };
   }, [botTurn, config, game, getClient, speed]);
 
@@ -371,6 +374,16 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
     }
   }, [config.difficulty, friends, game, getClient]);
 
+  // The result waits a beat after the last card, so its landing is seen
+  // before the dialog covers the table.
+  const [resultFor, setResultFor] = useState<GameState | null>(null);
+  useEffect(() => {
+    if (game.winner === null) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => setResultFor(game), reduce ? 0 : RESULT_BEAT_MS);
+    return () => clearTimeout(timer);
+  }, [game]);
+
   const recordedMatch = useRef<MatchState | null>(null);
   useEffect(() => {
     if (friends || !match.over || match.config.games === 1 || recordedMatch.current === match) return;
@@ -389,10 +402,14 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   }, [friends]);
 
   const play = useCallback(() => {
+    if (myTurn && selected.length > 0 && !canPlay) {
+      setRefusal({ cards: selected, reason: whyIllegal(game, selected, names), at: Date.now() });
+      return;
+    }
     if (!canPlay) return;
     setMatch((m) => playMove(m, selected));
     finishTurn();
-  }, [canPlay, finishTurn, selected]);
+  }, [canPlay, finishTurn, game, myTurn, names, selected]);
 
   const pass = useCallback(() => {
     if (!canPass) return;
@@ -507,6 +524,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
       ? <AdvicePanel status={advice} onPick={(cards) => setSelected(cards)} />
       : <HistoryPanel game={game} names={names} hand={hand} />;
 
+  const refused = refusal && refusal.cards === selected ? refusal : null;
   const handoff = friends && game.winner === null && humans.includes(game.current) && viewer !== game.current;
   const scoreboard = match.wins.map((wins, seat) => `${shortName(names[seat])} ${wins}`).join("  ");
   const difficultyLabel = friends && humans.length === 4 ? "NO BOTS" : match.config.difficulty.toUpperCase();
@@ -544,7 +562,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         <div className="flex flex-col gap-5 min-w-0">
           <Table
             game={game}
-            thinking={thinking}
+            thinking={botTurn}
             names={names}
             seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
             youSeat={friends ? -1 : 0}
@@ -563,6 +581,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
               selected={selected}
               playable={myTurn ? playable : new Set(hand)}
               groups={groups}
+              refused={refused?.at}
               onToggle={toggle}
               onSlideSelect={setSelected}
               onReorder={(o) => {
@@ -595,18 +614,25 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
               disabled={!undoOrder || handSeat === null} className={`${button} px-3 py-2 min-h-11 bg-card`}>UNDO</button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <button type="button" onClick={play} disabled={!canPlay}
+          {/* Below 1024px the turn actions stay pinned to the bottom of the screen, within thumb reach. */}
+          <div className="grid grid-cols-[3fr_3fr_2fr_2fr] sm:grid-cols-4 gap-3 max-lg:sticky max-lg:bottom-0 max-lg:z-30 max-lg:-mx-4 sm:max-lg:-mx-10 max-lg:px-4 sm:max-lg:px-10 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:bg-paper max-lg:border-t-3 max-lg:border-ink">
+            {refused && (
+              <p role="status" key={refused.at}
+                className="col-span-full bg-ink text-paper px-3 py-2 font-mono text-xs sm:text-sm motion-safe:animate-[reveal_220ms_cubic-bezier(0.16,1,0.3,1)]">
+                {refused.reason}
+              </p>
+            )}
+            <button type="button" onClick={play} disabled={!myTurn || selected.length === 0}
               className={`${button} ${action} bg-accent`}>PLAY</button>
             <button type="button" onClick={pass} disabled={!canPass}
               className={`${button} ${action} bg-card`}>PASS</button>
             <button type="button" onClick={cycleCombos} disabled={!myTurn}
-              className={`${button} ${action} bg-card`}>COMBOS</button>
+              className={`${button} ${action} max-sm:text-xs bg-card`}>COMBOS</button>
             <button type="button" onClick={() => { void hint(); if (!isWide()) setSheet("advice"); }} disabled={!myTurn}
-              className={`${button} ${action} bg-card`}>HINT</button>
-            <button type="button" onClick={() => setSheet("history")}
-              className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden col-span-2 sm:col-span-4`}>HISTORY</button>
+              className={`${button} ${action} max-sm:text-xs bg-card`}>HINT</button>
           </div>
+          <button type="button" onClick={() => setSheet("history")}
+            className={`${button} h-12 bg-card shadow-brutal-sm lg:hidden`}>HISTORY</button>
         </div>
 
         <aside className="hidden lg:flex flex-col border-3 border-ink bg-card shadow-brutal self-start max-h-[calc(100vh-180px)]">
@@ -669,7 +695,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         />
       )}
 
-      {game.winner !== null && (
+      {game.winner !== null && resultFor === game && (
         <Result
           match={match}
           names={names}
@@ -737,12 +763,30 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
   const winner = match.game.winner!;
   const winners = matchWinners(match);
   const friends = match.config.mode === "friends";
+  // Vs bots, a loss is quieter than a win and shows what was left in your hand.
+  const lost = !friends && winner !== 0;
+  const leftover = lost ? sortHand(match.game.hands[0], "rank") : [];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
-      <section role="dialog" aria-label="Game over" className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
-        <h2 className="text-4xl font-black leading-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 motion-safe:animate-[fade_220ms_cubic-bezier(0.16,1,0.3,1)]">
+      <section role="dialog" aria-modal="true" aria-label="Game over"
+        className={`w-full max-w-md border-3 border-ink bg-card p-6 flex flex-col gap-5 motion-safe:animate-[reveal_220ms_cubic-bezier(0.16,1,0.3,1)] ${
+          lost ? "shadow-brutal" : "shadow-[6px_6px_0_var(--accent)]"
+        }`}>
+        <h2 className={`text-4xl font-black leading-none origin-left ${
+          lost ? "" : "motion-safe:animate-[slam_420ms_cubic-bezier(0.16,1,0.3,1)_both]"
+        }`}>
           {winner === 0 && !friends ? "YOU WIN" : `${names[winner].toUpperCase()} WINS`}
         </h2>
+        {lost && (
+          <div className="flex flex-col gap-2">
+            <p className="font-mono text-sm">
+              YOU WERE LEFT WITH {leftover.length} {leftover.length === 1 ? "CARD" : "CARDS"}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {leftover.map((c) => <CardFace key={c} card={c} compact className="w-8 h-11 shadow-brutal-sm" />)}
+            </div>
+          </div>
+        )}
         {match.config.games > 1 && (
           <div className="grid grid-cols-4 border-3 border-ink">
             {match.wins.map((w, seat) => (
@@ -764,12 +808,12 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
           <button type="button" onClick={onReview} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>REVIEW</button>
           {!match.over && (
             <>
-              <button type="button" onClick={onNext} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>NEXT GAME</button>
+              <button type="button" autoFocus onClick={onNext} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>NEXT GAME</button>
               <button type="button" onClick={onEnd} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>FINISH MATCH</button>
             </>
           )}
           {match.over && (
-            <button type="button" onClick={onNewMatch} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>PLAY AGAIN</button>
+            <button type="button" autoFocus onClick={onNewMatch} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>PLAY AGAIN</button>
           )}
         </div>
       </section>

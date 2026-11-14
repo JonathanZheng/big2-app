@@ -30,7 +30,7 @@ export function AccentPicker() {
           onClick={() => choose(a.id)}
           // The chosen swatch is pressed into its shadow and turns black, so no outline
           // is needed to mark it.
-          className={`flex items-center gap-2 border-3 border-ink px-3 py-2 font-extrabold text-xs transition-transform ${
+          className={`flex items-center gap-2 border-3 border-ink px-3 py-2 font-extrabold text-xs motion-safe:transition-transform ${
             accent === a.id ? "translate-x-1 translate-y-1 bg-ink text-paper" : "bg-card shadow-brutal-sm hover:-translate-y-0.5"
           }`}
         >

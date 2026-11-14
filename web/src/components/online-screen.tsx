@@ -343,7 +343,8 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
             onSlideSelect={setSelected}
             onReorder={setOrder}
           />
-          <div className="grid grid-cols-3 gap-3">
+          {/* Below 1024px the turn actions stay pinned to the bottom of the screen, within thumb reach. */}
+          <div className="grid grid-cols-3 gap-3 max-lg:sticky max-lg:bottom-0 max-lg:z-30 max-lg:-mx-4 sm:max-lg:-mx-10 max-lg:px-4 sm:max-lg:px-10 max-lg:pt-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-lg:bg-paper max-lg:border-t-3 max-lg:border-ink">
             <button type="button" disabled={!myTurn || !legalKeys.has(key(selected)) || selected.length === 0}
               onClick={() => void play(selected)} className={`${button} h-14 sm:h-16 text-lg sm:text-2xl bg-accent shadow-brutal`}>PLAY</button>
             <button type="button" disabled={!myTurn || !legalKeys.has("")} onClick={() => void play([])}

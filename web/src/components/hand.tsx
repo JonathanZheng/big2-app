@@ -11,6 +11,9 @@ import { groupBreaks, handOffsets } from "@/lib/hand/layout";
 
 const HOLD_MS = 250;
 const SLIDE_PX = 8;
+/** Sweep timing from the big2-motion skill, for cards closing up or reordering. */
+const CLOSE_MS = 300;
+const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 interface HandProps {
   order: Card[];
@@ -19,6 +22,8 @@ interface HandProps {
   playable: Set<Card>;
   /** Cards kept together; drawn with a gap around each group. */
   groups: Card[][];
+  /** Set when a play was refused; the selected cards shake once per new value. */
+  refused?: number;
   disabled?: boolean;
   onToggle: (card: Card) => void;
   /** Sliding a finger or pointer across cards selects exactly those cards. */
@@ -31,7 +36,7 @@ interface HandProps {
  * selects them; holding a card for a moment picks it up to drag. Arrow keys
  * move between cards and Space toggles.
  */
-export function Hand({ order, selected, playable, groups, disabled, onToggle, onSlideSelect, onReorder }: HandProps) {
+export function Hand({ order, selected, playable, groups, refused, disabled, onToggle, onSlideSelect, onReorder }: HandProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: HOLD_MS, tolerance: SLIDE_PX } }),
   );
@@ -55,6 +60,37 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
     return () => observer.disconnect();
   }, []);
   const offsets = handOffsets(order.length, size.width, size.card, groupBreaks(order, groups));
+
+  // FLIP: after each render, a card whose place in the row changed slides from
+  // its old place to its new one, so the hand closes up after a play and a sort
+  // can be followed by eye. Drags animate themselves, and a resize just snaps.
+  const dragging = useRef(false);
+  const lefts = useRef<{ width: number; at: Map<Card, number> }>({ width: 0, at: new Map() });
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!el) return;
+    const before = lefts.current;
+    // Only a play (cards leave) or a reorder (same cards) slides. A new deal or
+    // another seat's hand brings cards that were not there, and just appears.
+    const sameOrFewer = order.every((card) => before.at.has(card));
+    const animate = sameOrFewer && before.width === size.width && !dragging.current
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const at = new Map<Card, number>();
+    for (const button of el.querySelectorAll<HTMLElement>("button[data-card]")) {
+      const card = Number(button.dataset.card);
+      // offsetLeft is the layout position, unaffected by running animations.
+      const left = button.offsetLeft;
+      at.set(card, left);
+      const from = before.at.get(card);
+      if (animate && from !== undefined && from !== left) {
+        button.animate(
+          [{ transform: `translateX(${from - left}px)` }, { transform: "none" }],
+          { duration: CLOSE_MS, easing: EASE_OUT, composite: "add" },
+        );
+      }
+    }
+    lefts.current = { width: size.width, at };
+  });
 
   function onPointerDown(e: React.PointerEvent) {
     // Keep receiving the release even when the pointer leaves the hand. The
@@ -100,6 +136,9 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   }
 
   function onDragEnd({ active, over }: DragEndEvent) {
+    // The dropped order is already on screen through dnd-kit's own transforms,
+    // so the render that commits it must not slide anything again.
+    requestAnimationFrame(() => { dragging.current = false; });
     if (!over || active.id === over.id) return;
     onReorder(arrayMove(order, order.indexOf(Number(active.id)), order.indexOf(Number(over.id))));
   }
@@ -114,7 +153,10 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={() => { dragging.current = true; }}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => { dragging.current = false; }}>
       <SortableContext items={order} strategy={horizontalListSortingStrategy}>
         <div
           ref={row}
@@ -134,6 +176,7 @@ export function Hand({ order, selected, playable, groups, disabled, onToggle, on
               selected={selected.includes(card)}
               dimmed={!playable.has(card)}
               offset={offsets[i]}
+              refused={selected.includes(card) ? refused : undefined}
               disabled={disabled}
               onClick={() => {
                 if (suppressClick.current) return void (suppressClick.current = false);
@@ -156,8 +199,8 @@ function cardAt(x: number, y: number): Card | null {
   return el ? Number(el.dataset.card) : null;
 }
 
-function HandCard({ card, selected, dimmed, offset, disabled, onClick }: {
-  card: Card; selected: boolean; dimmed: boolean; offset: number; disabled?: boolean; onClick: () => void;
+function HandCard({ card, selected, dimmed, offset, refused, disabled, onClick }: {
+  card: Card; selected: boolean; dimmed: boolean; offset: number; refused?: number; disabled?: boolean; onClick: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card, disabled });
   return (
@@ -178,15 +221,19 @@ function HandCard({ card, selected, dimmed, offset, disabled, onClick }: {
         zIndex: isDragging ? 50 : undefined,
       }}
       // A raised card moves with `translate`, which does not change the layout,
-      // so selecting never shifts the other cards.
-      className={`relative shrink-0 text-left transition-[translate] ${selected ? "-translate-y-6" : ""}`}
+      // so selecting never shifts the other cards. With reduced motion, cards
+      // move straight to their place, dnd-kit's sorting transition included.
+      className={`relative shrink-0 text-left motion-safe:transition-[translate] motion-reduce:transition-none! ${selected ? "-translate-y-6" : ""}`}
     >
-      <CardFace
-        card={card}
-        selected={selected}
-        dimmed={dimmed}
-        className="w-13 h-20 sm:w-16 sm:h-24 shadow-brutal-sm"
-      />
+      {/* Keyed by the refusal, so each refused PLAY shakes the selection once. */}
+      <span key={refused} className={`block ${refused ? "motion-safe:animate-[shake_180ms_linear]" : ""}`}>
+        <CardFace
+          card={card}
+          selected={selected}
+          dimmed={dimmed}
+          className="w-13 h-20 sm:w-16 sm:h-24 shadow-brutal-sm"
+        />
+      </span>
     </button>
   );
 }
