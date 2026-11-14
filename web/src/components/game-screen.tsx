@@ -5,6 +5,7 @@ import { AdvicePanel, type AdviceStatus } from "@/components/advice-panel";
 import { Hand } from "@/components/hand";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReviewPanel } from "@/components/review-panel";
+import { CardFace } from "@/components/card";
 import { Table } from "@/components/table";
 import { type Difficulty, botMove } from "@/lib/bots/bots";
 import { smartMove } from "@/lib/bots/smart";
@@ -28,6 +29,8 @@ import { recordGame, recordMatch } from "@/lib/session/stats";
 type ModelStatus = "loading" | "ready" | "failed";
 type Speed = "slow" | "normal" | "fast";
 const BOT_DELAY: Record<Speed, number> = { slow: 1200, normal: 700, fast: 250 };
+/** The beat between the last card landing and the result appearing (big2-motion skill). */
+const RESULT_BEAT_MS = 600;
 const MODEL_FAILED = "Model failed to load. Easy and Medium still work.";
 const key = (cards: Card[]) => [...cards].sort((a, b) => a - b).join(",");
 
@@ -367,6 +370,16 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
     }
   }, [config.difficulty, friends, game, getClient]);
 
+  // The result waits a beat after the last card, so its landing is seen
+  // before the dialog covers the table.
+  const [resultFor, setResultFor] = useState<GameState | null>(null);
+  useEffect(() => {
+    if (game.winner === null) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = setTimeout(() => setResultFor(game), reduce ? 0 : RESULT_BEAT_MS);
+    return () => clearTimeout(timer);
+  }, [game]);
+
   const recordedMatch = useRef<MatchState | null>(null);
   useEffect(() => {
     if (friends || !match.over || match.config.games === 1 || recordedMatch.current === match) return;
@@ -666,7 +679,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         />
       )}
 
-      {game.winner !== null && (
+      {game.winner !== null && resultFor === game && (
         <Result
           match={match}
           names={names}
@@ -734,12 +747,30 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
   const winner = match.game.winner!;
   const winners = matchWinners(match);
   const friends = match.config.mode === "friends";
+  // Vs bots, a loss is quieter than a win and shows what was left in your hand.
+  const lost = !friends && winner !== 0;
+  const leftover = lost ? sortHand(match.game.hands[0], "rank") : [];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
-      <section role="dialog" aria-label="Game over" className="w-full max-w-md border-3 border-ink bg-card p-6 shadow-brutal flex flex-col gap-5">
-        <h2 className="text-4xl font-black leading-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 motion-safe:animate-[fade_220ms_cubic-bezier(0.16,1,0.3,1)]">
+      <section role="dialog" aria-label="Game over"
+        className={`w-full max-w-md border-3 border-ink bg-card p-6 flex flex-col gap-5 motion-safe:animate-[reveal_220ms_cubic-bezier(0.16,1,0.3,1)] ${
+          lost ? "shadow-brutal" : "shadow-[6px_6px_0_var(--accent)]"
+        }`}>
+        <h2 className={`text-4xl font-black leading-none origin-left ${
+          lost ? "" : "motion-safe:animate-[slam_420ms_cubic-bezier(0.16,1,0.3,1)_both]"
+        }`}>
           {winner === 0 && !friends ? "YOU WIN" : `${names[winner].toUpperCase()} WINS`}
         </h2>
+        {lost && (
+          <div className="flex flex-col gap-2">
+            <p className="font-mono text-sm">
+              YOU WERE LEFT WITH {leftover.length} {leftover.length === 1 ? "CARD" : "CARDS"}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {leftover.map((c) => <CardFace key={c} card={c} compact className="w-8 h-11 shadow-brutal-sm" />)}
+            </div>
+          </div>
+        )}
         {match.config.games > 1 && (
           <div className="grid grid-cols-4 border-3 border-ink">
             {match.wins.map((w, seat) => (

@@ -97,6 +97,16 @@ body {
 @keyframes stamp {
   from { scale: 1.3; opacity: 0; }
 }
+/* A win slams onto the result: it arrives big, squashes on impact and settles. */
+@keyframes slam {
+  0% { scale: 1.8; opacity: 0; }
+  60% { scale: 0.96 1.04; opacity: 1; }
+  100% { scale: 1; }
+}
+/* An overlay fading in behind its dialog. */
+@keyframes fade {
+  from { opacity: 0; }
+}
 /* The cards-left numeral squashes when it drops. */
 @keyframes count {
   from { scale: 1.12 0.82; }
