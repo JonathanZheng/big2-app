@@ -83,7 +83,7 @@ export function HomeScreen() {
       </section>
 
       <section aria-label="Ways to play" className="grid gap-6 md:grid-cols-12">
-        <Link href={vsBots.href} className="md:col-span-5 min-h-56 flex flex-col justify-between gap-6 p-7 border-3 border-ink bg-ink text-paper shadow-[6px_6px_0_var(--accent)] transition-[translate] duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5">
+        <Link href={vsBots.href} className="md:col-span-5 min-h-56 flex flex-col justify-between gap-6 p-7 border-3 border-ink bg-ink text-paper shadow-[6px_6px_0_var(--accent)] motion-safe:transition-[translate] motion-safe:duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5">
           <h2 className="text-[44px] font-black leading-[0.95] tracking-[-0.03em]">{vsBots.label}</h2>
           <span className="flex flex-col gap-2.5">
             <span className={`${mono} text-paper/90`}>YOU AGAINST THREE BOTS. EASY IS GREEDY, MEDIUM IS SMART, HARD IS THE TRAINED MODEL.</span>
