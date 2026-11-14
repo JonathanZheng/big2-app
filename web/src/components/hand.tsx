@@ -70,7 +70,10 @@ export function Hand({ order, selected, playable, groups, refused, disabled, onT
     const el = row.current;
     if (!el) return;
     const before = lefts.current;
-    const animate = before.width === size.width && !dragging.current
+    // Only a play (cards leave) or a reorder (same cards) slides. A new deal or
+    // another seat's hand brings cards that were not there, and just appears.
+    const sameOrFewer = order.every((card) => before.at.has(card));
+    const animate = sameOrFewer && before.width === size.width && !dragging.current
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const at = new Map<Card, number>();
     for (const button of el.querySelectorAll<HTMLElement>("button[data-card]")) {
