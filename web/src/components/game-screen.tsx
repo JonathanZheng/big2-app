@@ -752,7 +752,7 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
   const leftover = lost ? sortHand(match.game.hands[0], "rank") : [];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 motion-safe:animate-[fade_220ms_cubic-bezier(0.16,1,0.3,1)]">
-      <section role="dialog" aria-label="Game over"
+      <section role="dialog" aria-modal="true" aria-label="Game over"
         className={`w-full max-w-md border-3 border-ink bg-card p-6 flex flex-col gap-5 motion-safe:animate-[reveal_220ms_cubic-bezier(0.16,1,0.3,1)] ${
           lost ? "shadow-brutal" : "shadow-[6px_6px_0_var(--accent)]"
         }`}>
@@ -792,12 +792,12 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
           <button type="button" onClick={onReview} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>REVIEW</button>
           {!match.over && (
             <>
-              <button type="button" onClick={onNext} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>NEXT GAME</button>
+              <button type="button" autoFocus onClick={onNext} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>NEXT GAME</button>
               <button type="button" onClick={onEnd} className={`${button} px-5 py-3 bg-card shadow-brutal-sm`}>FINISH MATCH</button>
             </>
           )}
           {match.over && (
-            <button type="button" onClick={onNewMatch} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>PLAY AGAIN</button>
+            <button type="button" autoFocus onClick={onNewMatch} className={`${button} px-5 py-3 bg-accent shadow-brutal-sm`}>PLAY AGAIN</button>
           )}
         </div>
       </section>
