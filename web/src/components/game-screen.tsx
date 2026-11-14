@@ -289,7 +289,6 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const [tab, setTab] = useState<"advice" | "history">("advice");
   const [sheet, setSheet] = useState<"advice" | "history" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [thinking, setThinking] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [viewer, setViewer] = useState<number | null>(friends ? null : 0);
   const [leaving, setLeaving] = useState<"restart" | "exit" | null>(null);
@@ -315,14 +314,14 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
     [baseOrder, hand, handSeat],
   );
 
-  // Bots take their turns after a short delay.
+  // Bots take their turns after a short delay. The seat shows THINKING for the
+  // whole turn, delay included, so a bot turn is never silent.
   // Bots wait while the restart or exit question is open.
   const botTurn = game.winner === null && isBotSeat(config, game.current) && leaving === null;
   useEffect(() => {
     if (!botTurn) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
-      setThinking(true);
       let move: Card[];
       try {
         move = await botMove(config.difficulty, game, game.current, getClient());
@@ -331,14 +330,11 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         move = smartMove(game, game.current);
       }
       if (cancelled) return;
-      setThinking(false);
       setMatch((m) => (m.game === game ? playMove(m, move) : m));
     }, BOT_DELAY[speed]);
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      // A cancelled turn must not leave the seat saying THINKING.
-      setThinking(false);
     };
   }, [botTurn, config, game, getClient, speed]);
 
@@ -544,7 +540,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
         <div className="flex flex-col gap-5 min-w-0">
           <Table
             game={game}
-            thinking={thinking}
+            thinking={botTurn}
             names={names}
             seats={friends ? [0, 1, 2, 3] : [1, 2, 3]}
             youSeat={friends ? -1 : 0}
