@@ -63,6 +63,16 @@ describe("analyseGame slips", () => {
     expect(a.passedInstead + a.otherPlay).toBe(a.inaccuracies + a.mistakes + a.blunders);
   });
 
+  it("counts a different play when the bot wanted another play", async () => {
+    // A scorer that always wants the last play it lists and never a pass.
+    const score = async (state: GameState, player: number) => {
+      const moves = legalMoves(state, player);
+      return { moves, scores: Float32Array.from(moves.map((m: Card[], i) => (m.length === 0 ? -50 : i))) };
+    };
+    const a = await analyseGame(finishedGame(4), 0, score);
+    expect(a.otherPlay).toBeGreaterThan(0);
+  });
+
   it("skips moves the scorer does not list", async () => {
     const a = await analyseGame(finishedGame(4), 0, async () => ({ moves: [], scores: new Float32Array() }));
     expect(a.moves).toBe(0);

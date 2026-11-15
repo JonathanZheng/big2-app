@@ -78,6 +78,11 @@ describe("canBeat", () => {
 });
 
 describe("card colours and mismatched tables", () => {
+  it("refuses text that is not a card", () => {
+    expect(() => parseCards("3d 1x")).toThrow("Not a card: 1x");
+    expect(parseCards("Th")).toEqual(parseCards("10h"));
+  });
+
   it("knows diamonds and hearts are red", () => {
     expect(parseCards("3d 3h").map(isRed)).toEqual([true, true]);
     expect(parseCards("3c 3s").map(isRed)).toEqual([false, false]);

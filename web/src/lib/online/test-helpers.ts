@@ -44,7 +44,7 @@ export function fakeSupabase(respond: (query: Query) => Reply = () => ({})) {
     from: (table: string) => chain({ table, steps: [] }),
     rpc: (name: string, params: unknown) => chain({ table: `rpc:${name}`, steps: [{ method: "rpc", args: [params] }] }),
     auth: {
-      getUser: async (_token: string): Promise<{ data: { user: unknown }; error: { message: string } | null }> =>
+      getUser: async (): Promise<{ data: { user: unknown }; error: { message: string } | null }> =>
         ({ data: { user: null }, error: null }),
     },
   };
