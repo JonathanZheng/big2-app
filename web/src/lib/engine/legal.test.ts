@@ -48,3 +48,9 @@ describe("legalMoves", () => {
     expect(legal).toContainEqual(sorted("Ad 2d 3d 4d 5d"));
   });
 });
+
+describe("canonicalOrder with repeats", () => {
+  it("keeps identical moves next to each other", () => {
+    expect(canonicalOrder([[5], [], [5]])).toEqual([[], [5], [5]]);
+  });
+});

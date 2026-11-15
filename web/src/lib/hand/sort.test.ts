@@ -68,3 +68,9 @@ describe("comboAnchor", () => {
     expect(comboAnchor([], null)).toBeNull();
   });
 });
+
+describe("groupCards without members", () => {
+  it("leaves the order alone when none of the group is in it", () => {
+    expect(groupCards([1, 2, 3], [9])).toEqual([1, 2, 3]);
+  });
+});

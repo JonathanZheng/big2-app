@@ -96,3 +96,9 @@ describe("statsDelta", () => {
     expect(delta.map((d) => [d.userId, d.matches, d.matchWins])).toEqual([["u0", 1, 1], ["u1", 1, 0], ["u3", 1, 1]]);
   });
 });
+
+describe("canTakeOver without contact", () => {
+  it("counts a player who has never checked in as away", () => {
+    expect(canTakeOver(seat(1, { lastSeen: null }), Date.now())).toBe(true);
+  });
+});

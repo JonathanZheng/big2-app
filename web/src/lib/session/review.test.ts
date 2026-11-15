@@ -39,3 +39,10 @@ describe("reviewStates", () => {
     }
   });
 });
+
+describe("reviewStates before any move", () => {
+  it("returns just the position when nothing was played", () => {
+    const empty: GameState = { hands: [[0], [1], [2], [3]], current: 0, firstMove: true, lastPlay: null, passes: 0, history: [], winner: null };
+    expect(reviewStates(empty)).toEqual([empty]);
+  });
+});

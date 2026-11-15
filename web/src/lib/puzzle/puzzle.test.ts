@@ -78,3 +78,14 @@ describe("signed in", () => {
     expect(readQueue("a")?.puzzles["2026-11-01"].label).toBe("Good");
   });
 });
+
+describe("readGuestResults with unexpected data", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("ignores a saved value that is not an object", () => {
+    for (const raw of ["5", "null"]) {
+      vi.stubGlobal("localStorage", { getItem: () => raw, setItem: () => {}, removeItem: () => {} });
+      expect(readGuestResults()).toEqual({});
+    }
+  });
+});

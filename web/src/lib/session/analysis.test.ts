@@ -49,3 +49,32 @@ describe("summariseAnalyses", () => {
     expect(s.recentSlips).toEqual([2, 3]);
   });
 });
+
+describe("analyseGame slips", () => {
+  it("counts passes and smaller plays when the bot wanted the biggest play", async () => {
+    const game = finishedGame(4);
+    // A scorer that prefers more cards and likes passing least.
+    const score = async (state: GameState, player: number) => {
+      const moves = legalMoves(state, player);
+      return { moves, scores: Float32Array.from(moves.map((m: Card[]) => (m.length === 0 ? -3 : m.length))) };
+    };
+    const a = await analyseGame(game, 0, score);
+    expect(a.playedInstead).toBe(0);
+    expect(a.passedInstead + a.otherPlay).toBe(a.inaccuracies + a.mistakes + a.blunders);
+  });
+
+  it("counts a different play when the bot wanted another play", async () => {
+    // A scorer that always wants the last play it lists and never a pass.
+    const score = async (state: GameState, player: number) => {
+      const moves = legalMoves(state, player);
+      return { moves, scores: Float32Array.from(moves.map((m: Card[], i) => (m.length === 0 ? -50 : i))) };
+    };
+    const a = await analyseGame(finishedGame(4), 0, score);
+    expect(a.otherPlay).toBeGreaterThan(0);
+  });
+
+  it("skips moves the scorer does not list", async () => {
+    const a = await analyseGame(finishedGame(4), 0, async () => ({ moves: [], scores: new Float32Array() }));
+    expect(a.moves).toBe(0);
+  });
+});

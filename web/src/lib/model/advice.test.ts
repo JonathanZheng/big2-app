@@ -47,3 +47,14 @@ describe("rankAdvice", () => {
     expect(advice.slice(3).every((a) => a.evaluation === null)).toBe(true);
   });
 });
+
+describe("labelMoves extremes", () => {
+  it("calls a move that throws the game away a blunder", () => {
+    expect(labelMoves(Float32Array.from([10, -10]))).toEqual(["Best", "Blunder"]);
+  });
+
+  it("uses every label as the gap to the best move grows", () => {
+    const scores = Float32Array.from({ length: 1001 }, (_, i) => -i / 100);
+    expect(new Set(labelMoves(scores))).toEqual(new Set(["Best", "Good", "Inaccuracy", "Mistake", "Blunder"]));
+  });
+});

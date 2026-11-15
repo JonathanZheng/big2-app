@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ACCENTS, DEFAULT_ACCENT, readAccent, saveAccent } from "./theme";
+import { ACCENTS, DEFAULT_ACCENT, applyAccent, readAccent, saveAccent } from "./theme";
 
 /** WCAG contrast ratio between two #rrggbb colours. */
 function contrast(a: string, b: string): number {
@@ -55,5 +55,14 @@ describe("globals.css", () => {
       expect(body).toContain(`--accent: ${a.accent}`);
       expect(body).toContain(`--picked: ${a.picked}`);
     }
+  });
+});
+
+describe("applyAccent", () => {
+  it("sets the accent on the page root", () => {
+    const root = { dataset: {} as Record<string, string> };
+    vi.stubGlobal("document", { documentElement: root });
+    applyAccent(ACCENTS[1].id);
+    expect(root.dataset.accent).toBe(ACCENTS[1].id);
   });
 });
