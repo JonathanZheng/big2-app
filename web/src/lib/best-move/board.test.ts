@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { memoryStorage } from "@/lib/account/test-helpers";
 import { parseCards } from "@/lib/engine/cards";
 import { encodeState } from "@/lib/model/encoding";
 import {
-  EMPTY_BOARD, autoCounts, boardToGame, checkBoard, cycleOwner, isOpening, myHand, setOwner, toggleLastCard,
-  type Board,
+  EMPTY_BOARD, autoCounts, boardToGame, checkBoard, cycleOwner, isOpening, lastPlayerCards, myHand, opponentCounts, readBoard,
+  saveBoard, setOwner, toggleLastCard, type Board,
 } from "./board";
 
 function boardWith(mine: string, played: Partial<Record<"west" | "north" | "east", string>> = {}, out = ""): Board {
@@ -143,5 +144,121 @@ describe("checkBoard", () => {
     expect(myHand(base)).toHaveLength(13);
     const board: Board = { ...base, counts: [13, 13, 12] };
     expect(checkBoard(board).warnings).toEqual([]);
+  });
+});
+
+describe("board helpers", () => {
+  it("lists the trick player's cards, or none when I am leading", () => {
+    const board = boardWith("4c", { north: "5d 6d" });
+    expect(lastPlayerCards(board)).toEqual([]);
+    expect(lastPlayerCards({ ...board, lastPlayer: 2 })).toEqual(parseCards("5d 6d"));
+  });
+
+  it("uses typed counts over the automatic ones", () => {
+    const board = boardWith("4c", { west: "5d" });
+    expect(opponentCounts(board)).toEqual([12, 13, 13]);
+    expect(opponentCounts({ ...board, counts: [1, 2, 3] })).toEqual([1, 2, 3]);
+  });
+
+  it("clears the trick when an owner changes while I am leading", () => {
+    const board = setOwner({ ...boardWith("4c"), lastCards: [5] }, 6, "mine");
+    expect(board.lastCards).toEqual([]);
+  });
+
+  it("ignores trick toggles while I am leading", () => {
+    const board = boardWith("4c");
+    expect(toggleLastCard(board, 5)).toBe(board);
+  });
+
+  it("builds an opening state with no trick, and still fills hands when every card is mine", () => {
+    const opening = boardToGame(boardWith("3d 4c"));
+    expect(opening.firstMove).toBe(true);
+    expect(opening.lastPlay).toBeNull();
+    expect(opening.passes).toBe(0);
+    expect(opening.history).toEqual([]);
+
+    const everything: Board = { ...EMPTY_BOARD, owners: Array(52).fill("mine"), counts: [1, 0, 0] };
+    expect(boardToGame(everything).hands[1]).toEqual([0]);
+  });
+});
+
+describe("checkBoard errors", () => {
+  const errors = (board: Board) => checkBoard(board).errors;
+
+  it("rejects a hand of more than 13 cards", () => {
+    expect(errors(boardWith("3d 4d 5d 6d 7d 8d 9d 10d Jd Qd Kd Ad 2d 3c"))).toContain("Your hand has more than 13 cards.");
+  });
+
+  it("asks to clear the table when I am leading", () => {
+    expect(errors({ ...boardWith("3d 4c"), lastCards: [5] })).toContain("Clear the cards on the table if you are leading.");
+  });
+
+  it("asks for the table cards when a seat played last", () => {
+    expect(errors({ ...boardWith("4c", { west: "3d" }), lastPlayer: 1 })).toContain("Mark the cards that are on the table.");
+  });
+
+  it("rejects a table card that is also in my hand", () => {
+    const board: Board = { ...boardWith("4c 5c", { west: "3d" }), lastPlayer: 1, lastCards: parseCards("4c") };
+    expect(errors(board)).toContain("A card in your hand cannot also be on the table.");
+  });
+
+  it("rejects a later trick before the 3♦ has been played", () => {
+    const board: Board = { ...boardWith("4c", { west: "5d" }), lastPlayer: 1, lastCards: parseCards("5d") };
+    expect(errors(board).join(" ")).toContain("3♦ has not been played yet");
+  });
+
+  it("rejects counts that are not whole numbers from 0 to 13", () => {
+    for (const counts of [[14, 0, 0], [-1, 0, 0], [1.5, 0, 0]] as [number, number, number][]) {
+      expect(errors({ ...boardWith("3d"), counts })).toContain("West has an invalid card count.");
+    }
+    expect(errors({ ...boardWith("3d"), counts: [0, 0, 20] })).toContain("East has an invalid card count.");
+  });
+});
+
+describe("saved board", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("saves and reads back a board", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    expect(readBoard()).toBeNull();
+    const board: Board = { ...boardWith("4c", { west: "3d 5d" }), lastPlayer: 1, lastCards: parseCards("5d"), passes: 2, counts: [11, 13, 13] };
+    saveBoard(board);
+    expect(readBoard()).toEqual(board);
+    saveBoard({ ...board, owners: board.owners.map((o) => (o === "mine" ? "minePlayed" : o)) });
+    expect(readBoard()?.owners).toContain("minePlayed");
+  });
+
+  it("ignores saved boards that are malformed", () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("localStorage", storage);
+    const good = boardWith("3d");
+    const bad: unknown[] = [
+      null,
+      "board",
+      { ...good, owners: good.owners.slice(1) },
+      { ...good, owners: [...good.owners.slice(1), "lost"] },
+      { ...good, lastPlayer: 4 },
+      { ...good, lastCards: "3d" },
+      { ...good, lastCards: [52] },
+      { ...good, passes: 3 },
+      { ...good, counts: "13" },
+      { ...good, counts: [1, 2] },
+      { ...good, counts: [1, 2, 14] },
+    ];
+    for (const value of bad) {
+      storage.setItem("big2.bestMove.v1", JSON.stringify(value));
+      expect(readBoard()).toBeNull();
+    }
+    storage.setItem("big2.bestMove.v1", "{");
+    expect(readBoard()).toBeNull();
+  });
+
+  it("keeps working when storage is blocked", () => {
+    const blocked = () => { throw new Error("blocked"); };
+    vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked, removeItem: blocked });
+    expect(readBoard()).toBeNull();
+    expect(() => saveBoard(EMPTY_BOARD)).not.toThrow();
   });
 });
