@@ -85,6 +85,36 @@ python3 train_selfplay.py --hours 8
 - Resumes from `checkpoints/selfplay/latest.pt` when it exists, otherwise starts from scratch. `models/selfplay_v1.pt` has no optimizer state. Its weights can initialize a new run with a fresh optimizer, but this CLI does not yet offer that option.
 - `checkpoints/` is not committed. Promotions use a new versioned model name after head-to-head validation; historical models are retained.
 
+## Tests
+
+### Python
+
+The tests in `tests/` use pytest. Besides `requirements.txt`, the JAX tests need `jax` and `optax`, and coverage needs `pytest-cov`.
+
+```bash
+python3 -m pytest tests/
+python3 -m pytest tests/ --cov=big2_ai --cov=experiments --cov-branch   # with coverage
+```
+
+| File | Checks |
+|---|---|
+| `test_straights.py` | The rules: straight and straight flush order including the wraparound runs, five-card hand order, the opening move, and that random games only generate valid moves |
+| `test_jax_env.py` | The JAX environment classifies every card subset like the Python engine and plays complete games identically, one at a time and batched |
+| `test_jax_policy.py` | JAX move scoring matches PyTorch, stays correct when candidate moves overflow the fixed capacity, explores only legal moves, and reuses its compiled code |
+| `test_jax_training.py` | Training rollouts give the same returns as Python, and checkpoints resume correctly |
+| `test_jax_evaluation.py` | Checkpoint evaluation: confidence intervals over paired deals, and verdicts on small samples |
+
+`tests/conftest.py` runs JAX on the CPU, because with `jax-metal` installed on a Mac, JAX picks the Apple GPU, which cannot compile some operations the environment uses. Set `JAX_PLATFORMS` to choose another backend, as the GPU commands below do. In VS Code, pick a Python interpreter that has these packages installed.
+
+### Web app
+
+The web app has Vitest unit tests (about 99.8% line coverage of its logic and API routes), integration tests against a running app, and k6 load tests for concurrency, spikes and long soaks. CI runs them on every pull request and nightly. See [Tests in the web README](web/README.md#tests).
+
+```bash
+cd web
+npm test
+```
+
 ## JAX GPU experiments
 
 We now have an experimental end-to-end JAX GPU trainer, alongside simulation
@@ -126,7 +156,7 @@ enabled with `--eval-every-games 500000` (requires CPU PyTorch); see the guide.
 
 The repository includes `models/selfplay_v1.npz`, the original benchmark and
 training initialization, plus the promoted `models/selfplay_v2.npz`, so running the sweep does not require PyTorch. Results are saved
-to `results/policy-sweep.json`. On a Mac, use `JAX_PLATFORMS=cpu` for tests;
+to `results/policy-sweep.json`. On a Mac, the tests run on the CPU by themselves;
 the sweep requires `--allow-cpu` for local smoke checks.
 
 The first GPU environment-only test reached about **148,816 decisions/s** at
