@@ -226,6 +226,8 @@ describe("saved board", () => {
     const board: Board = { ...boardWith("4c", { west: "3d 5d" }), lastPlayer: 1, lastCards: parseCards("5d"), passes: 2, counts: [11, 13, 13] };
     saveBoard(board);
     expect(readBoard()).toEqual(board);
+    saveBoard(boardWith("3d"));
+    expect(readBoard()?.counts).toBeNull();
     saveBoard({ ...board, owners: board.owners.map((o) => (o === "mine" ? "minePlayed" : o)) });
     expect(readBoard()?.owners).toContain("minePlayed");
   });
