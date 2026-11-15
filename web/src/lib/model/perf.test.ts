@@ -7,7 +7,13 @@ import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "./encoding";
 import { Network, type WeightsManifest } from "./network";
 
-it("finds and scores every move of a hand with many five-card options in under 300 ms", () => {
+// Coverage instrumentation slows the model several times over, so timings
+// taken during a coverage run say nothing. Vitest has no public flag for it;
+// if this internal one disappears, the test simply runs as usual.
+const coverageRun = (globalThis as { __vitest_worker__?: { config?: { coverage?: { enabled?: boolean } } } })
+  .__vitest_worker__?.config?.coverage?.enabled === true;
+
+it.skipIf(coverageRun)("finds and scores every move of a hand with many five-card options in under 300 ms", () => {
   const dir = path.resolve(__dirname, "../../../public/model");
   const manifest = JSON.parse(readFileSync(path.join(dir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
   const bytes = readFileSync(path.join(dir, "selfplay_v2.bin"));
