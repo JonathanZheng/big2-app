@@ -79,3 +79,10 @@ describe("signed in", () => {
     expect(readGuestReviews()).toEqual([]);
   });
 });
+
+describe("readGuestReviews with unexpected data", () => {
+  it("ignores a saved value that is not a list", () => {
+    vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ id: "r1" }), setItem: () => {}, removeItem: () => {} });
+    expect(readGuestReviews()).toEqual([]);
+  });
+});

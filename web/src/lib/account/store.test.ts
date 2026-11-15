@@ -4,7 +4,8 @@ import type { GameRecord } from "@/lib/session/profile";
 import type { SavedReview } from "@/lib/session/saved-reviews";
 import { emptyHistory } from "./merge";
 import {
-  HISTORY_EVENT, QUEUE_EVENT, addToQueue, finishInflight, queueChange, readAccount, readPending, readQueue, takeQueue, writeAccount,
+  HISTORY_EVENT, QUEUE_EVENT, addToQueue, finishInflight, queueChange, readAccount, readPending, readQueue, subscribeHistory, takeQueue,
+  writeAccount,
 } from "./store";
 
 const game = (at: number): GameRecord => ({ at, difficulty: "easy", won: true, cardsLeft: 0, plays: [], suits: [0, 0, 0, 0], hints: 0 });
@@ -150,5 +151,22 @@ describe("account store", () => {
     expect(() => writeAccount({ userId: "a", history: emptyHistory() })).not.toThrow();
     expect(() => addToQueue("a", { games: [game(1)] })).not.toThrow();
     expect(takeQueue("a")).toBeNull();
+  });
+});
+
+describe("subscribeHistory", () => {
+  it("calls back on changes from this tab and others until unsubscribed", () => {
+    const target = new EventTarget();
+    vi.stubGlobal("window", target);
+    const onChange = vi.fn();
+    const stop = subscribeHistory(onChange);
+    target.dispatchEvent(new Event("storage"));
+    target.dispatchEvent(new Event(HISTORY_EVENT));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    stop();
+    target.dispatchEvent(new Event("storage"));
+    target.dispatchEvent(new Event(HISTORY_EVENT));
+    expect(onChange).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
   });
 });

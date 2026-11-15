@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyBundle } from "./merge";
+import { PUZZLE_LIMIT, emptyBundle } from "./merge";
 import { MAX_GAME_BYTES, MAX_REVIEW_BYTES, parseBundle, sendable } from "./validate";
 
 const game = (at: number) => ({ at, difficulty: "easy", won: true, cardsLeft: 0, plays: [], suits: [0, 0, 0, 0], hints: 0 });
@@ -109,5 +109,16 @@ describe("sendable", () => {
     expect(kept.reviews.map((r) => r.id)).toEqual(["r1"]);
     expect(Object.keys(kept.puzzles)).toEqual(["2026-11-01"]);
     expect(parseBundle(kept)).not.toBeNull();
+  });
+});
+
+describe("parseBundle limits", () => {
+  it("refuses a match upload with more wins than matches", () => {
+    expect(parseBundle({ ...emptyBundle(), matches: [{ id: "m1", matches: 1, matchWins: 2 }] })).toBeNull();
+  });
+
+  it("refuses more puzzle days than the limit", () => {
+    const puzzles = Object.fromEntries(Array.from({ length: PUZZLE_LIMIT + 1 }, (_, i) => [`day${i}`, {}]));
+    expect(parseBundle({ ...emptyBundle(), puzzles })).toBeNull();
   });
 });

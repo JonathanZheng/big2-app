@@ -3,7 +3,7 @@ import { parseCards } from "@/lib/engine/cards";
 import type { GameState, Play } from "@/lib/engine/game";
 import { MoveType } from "@/lib/engine/moves";
 import { readQueue } from "@/lib/account/store";
-import { signedIn } from "@/lib/account/test-helpers";
+import { memoryStorage, signedIn } from "@/lib/account/test-helpers";
 import type { GameAnalysis } from "./analysis";
 import {
   type GameRecord, attachAnalysis, clearProfile, gameRecord, readGameRecords, readGuestGameRecords, saveGameRecord, summarise,
@@ -144,5 +144,33 @@ describe("signed in", () => {
     attachAnalysis(1, analysis);
     expect(readGameRecords()[0].analysis).toEqual(analysis);
     expect(readQueue("a")?.games[0].analysis).toEqual(analysis);
+  });
+});
+
+describe("guest records edge cases", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const analysis = { moves: 1, best: 1, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, passedInstead: 0, playedInstead: 0, otherPlay: 0 };
+
+  it("ignores a saved value that is not a list", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "{}", setItem: () => {}, removeItem: () => {} });
+    expect(readGuestGameRecords()).toEqual([]);
+  });
+
+  it("does nothing when the game to analyse is not saved, signed in or not", () => {
+    const storage = memoryStorage();
+    storage.setItem("big2.games.v1", JSON.stringify([{ at: 5 }]));
+    vi.stubGlobal("localStorage", storage);
+    attachAnalysis(123, analysis);
+    expect(storage.getItem("big2.games.v1")).toBe(JSON.stringify([{ at: 5 }]));
+    signedIn();
+    attachAnalysis(123, analysis);
+    expect(readQueue("a")).toBeNull();
+  });
+
+  it("keeps working when storage is blocked while saving an analysis", () => {
+    const storage = memoryStorage();
+    storage.setItem("big2.games.v1", JSON.stringify([{ at: 5 }]));
+    vi.stubGlobal("localStorage", { ...storage, setItem: () => { throw new Error("blocked"); } });
+    expect(() => attachAnalysis(5, analysis)).not.toThrow();
   });
 });

@@ -73,3 +73,9 @@ describe("one device seats", () => {
     expect(seatNames(four)).toEqual(["Player 1", "Player 2", "Player 3", "Player 4"]);
   });
 });
+
+describe("humanSeats default", () => {
+  it("seats four people at one device when the count is not given", () => {
+    expect(humanSeats({ difficulty: "easy", games: 1, mode: "friends" } as Parameters<typeof humanSeats>[0])).toEqual([0, 1, 2, 3]);
+  });
+});

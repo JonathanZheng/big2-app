@@ -3,7 +3,8 @@ import fixtures from "@/lib/engine/__fixtures__/positions.json";
 import type { Card } from "@/lib/engine/cards";
 import { type Fixture, type GameState, applyMove, deal, mulberry32, stateFromFixture } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
-import { botMove } from "./bots";
+import type { ModelClient } from "@/lib/model/client";
+import { botMove, modelMove } from "./bots";
 import { greedyMove } from "./greedy";
 import { smartMove } from "./smart";
 
@@ -58,5 +59,21 @@ describe("botMove", () => {
     const state = deal(mulberry32(3));
     expect(await botMove("easy", state, state.current, null)).toEqual(greedyMove(state, state.current));
     expect(await botMove("medium", state, state.current, null)).toEqual(smartMove(state, state.current));
+  });
+});
+
+describe("modelMove and the hard bot", () => {
+  const state = deal(mulberry32(11));
+  const client = (scores: number[]) =>
+    ({ score: async () => ({ moves: [[1], [2], [3]], scores: Float32Array.from(scores) }) }) as unknown as ModelClient;
+
+  it("plays the model's highest-scoring move, the first on a tie", async () => {
+    await expect(modelMove(client([0.1, 0.9, 0.5]), state, 0)).resolves.toEqual([2]);
+    await expect(modelMove(client([0.9, 0.1, 0.9]), state, 0)).resolves.toEqual([1]);
+  });
+
+  it("needs the model for hard bots", async () => {
+    await expect(botMove("hard", state, 0, null)).rejects.toThrow("model unavailable");
+    await expect(botMove("hard", state, 0, client([0, 0, 1]))).resolves.toEqual([3]);
   });
 });

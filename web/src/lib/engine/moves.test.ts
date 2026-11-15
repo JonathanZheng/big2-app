@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardName, parseCards } from "./cards";
+import { cardName, isRed, parseCards } from "./cards";
 import { MoveType, canBeat, detectMoveType } from "./moves";
 
 describe("cards", () => {
@@ -74,5 +74,16 @@ describe("canBeat", () => {
     expect(canBeat(parseCards("5d 5s"), parseCards("5c 5h"))).toBe(true);
     expect(canBeat(parseCards("4d 4c"), parseCards("3d"))).toBe(false);
     expect(canBeat(parseCards("3d"), [])).toBe(true);
+  });
+});
+
+describe("card colours and mismatched tables", () => {
+  it("knows diamonds and hearts are red", () => {
+    expect(parseCards("3d 3h").map(isRed)).toEqual([true, true]);
+    expect(parseCards("3c 3s").map(isRed)).toEqual([false, false]);
+  });
+
+  it("does not let a pair beat two cards that are not a pair", () => {
+    expect(canBeat(parseCards("5d 5c"), parseCards("3d 4c"))).toBe(false);
   });
 });

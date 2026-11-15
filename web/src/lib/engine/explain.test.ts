@@ -30,3 +30,19 @@ describe("whyIllegal", () => {
     expect(whyIllegal(state(false, "9h 9s"), parseCards("4d 4c"), names)).toBe("THAT DOES NOT BEAT WEST'S PLAY");
   });
 });
+
+describe("whyIllegal edge cases", () => {
+  const names = ["You", "West", "North", "East"];
+  const base: GameState = {
+    hands: [[], [], [], []], current: 0, firstMove: false, lastPlay: null, passes: 0, history: [], winner: null,
+  };
+
+  it("gives a general reason when nothing is on the table", () => {
+    expect(whyIllegal(base, parseCards("5d"), names)).toBe("THOSE CARDS CANNOT BE PLAYED");
+  });
+
+  it("says CARD, not CARDS, when a single is on the table", () => {
+    const game = { ...base, lastPlay: { player: 1, cards: parseCards("5d") } };
+    expect(whyIllegal(game, parseCards("6d 6c"), names)).toBe("PLAY 1 CARD TO MATCH WEST");
+  });
+});

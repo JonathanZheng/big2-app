@@ -283,6 +283,13 @@ describe("resetAccountHistory", () => {
     expect([sent(0).action, sent(1).action]).toEqual(["merge", "reset"]);
     expect(readAccount()?.history.games).toEqual([]);
   });
+
+  it("reset reports a connection problem when the server refuses it", async () => {
+    writeAccount({ userId: "a", history: history([game(1)]) });
+    fetchMock.mockResolvedValueOnce(refuse(500));
+    await expect(resetAccountHistory()).rejects.toThrow("RESET NEEDS A CONNECTION.");
+    expect(readAccount()?.history.games).toHaveLength(1);
+  });
 });
 
 describe("signOutAccount", () => {
