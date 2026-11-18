@@ -41,15 +41,15 @@ export function SiteHeader() {
           BIG 2
         </Link>
         <div className="w-full sm:w-auto flex flex-wrap items-center gap-3">
-          <nav aria-label="Pages" className="flex-1 sm:flex-none grid grid-cols-4 sm:flex border-3 border-ink">
-            {[...MODES, { href: "/profile", label: "PROFILE" }].map((page, i) => {
+          <nav aria-label="Pages" className="w-full sm:w-auto grid grid-cols-5 sm:flex border-3 border-ink">
+            {[...MODES, { href: "/puzzle", label: "DAILY PUZZLE" }, { href: "/profile", label: "PROFILE" }].map((page, i) => {
               const active = pathname.startsWith(page.href);
               return (
                 <Link
                   key={page.href}
                   href={page.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center justify-center text-center px-2 sm:px-4 py-3 text-xs sm:text-sm font-extrabold leading-tight transition-colors duration-150 ${i > 0 ? "border-l-3 border-ink" : ""} ${
+                  className={`flex items-center justify-center text-center px-1 sm:px-4 py-3 text-xs sm:text-sm font-extrabold leading-tight transition-colors duration-150 ${i > 0 ? "border-l-3 border-ink" : ""} ${
                     active ? "bg-accent" : "bg-paper hover:bg-accent"
                   }`}
                 >
