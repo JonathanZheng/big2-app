@@ -106,4 +106,17 @@ describe("POST /api/online", () => {
     expect(log).toHaveBeenCalledWith("Online action failed", expect.any(Error));
     log.mockRestore();
   });
+
+  it("hides database error text carried by a server error", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.startRoom.mockRejectedValue(new HttpError(500, 'invalid input syntax for type uuid: "x"'));
+    await expectError(await post({ action: "start", roomId: "x" }), 500, "Something went wrong on the server.");
+    expect(log).toHaveBeenCalledWith("Online action failed", expect.any(HttpError));
+    log.mockRestore();
+  });
+
+  it("still tells the player when online play is not set up", async () => {
+    mocks.requireUser.mockRejectedValue(new HttpError(503, "Online play is not set up on this server."));
+    await expectError(await post({ action: "join" }), 503, "Online play is not set up on this server.");
+  });
 });

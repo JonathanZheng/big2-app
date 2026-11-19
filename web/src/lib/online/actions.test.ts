@@ -117,7 +117,7 @@ describe("createRoom", () => {
   it("gives up after five taken codes", async () => {
     const base = respond;
     respond = (q) => (is(q, "rooms", "insert") ? { error: { message: "dup", code: "23505" } } : base(q));
-    await expect(createRoom(user(), settings)).rejects.toMatchObject({ status: 500, message: expect.stringContaining("free room code") });
+    await expect(createRoom(user(), settings)).rejects.toMatchObject({ status: 503, message: expect.stringContaining("free room code") });
     expect(found("rooms", "insert")).toHaveLength(5);
   });
 

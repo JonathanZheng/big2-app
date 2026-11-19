@@ -61,7 +61,7 @@ export async function createRoom(user: User, settings: {
     }))));
     return data as { id: string; code: string };
   }
-  throw new HttpError(500, "Could not find a free room code. Try again.");
+  throw new HttpError(503, "Could not find a free room code. Try again.");
 }
 
 export async function joinRoom(user: User, code: string) {
