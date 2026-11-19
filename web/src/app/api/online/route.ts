@@ -59,7 +59,10 @@ export async function POST(request: Request) {
         bad("Unknown action.");
     }
   } catch (error) {
-    if (error instanceof HttpError) return Response.json({ error: error.message }, { status: error.status });
+    // A 500 carries database error text, which stays in the server log.
+    if (error instanceof HttpError && error.status !== 500) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     console.error("Online action failed", error);
     return Response.json({ error: "Something went wrong on the server." }, { status: 500 });
   }
