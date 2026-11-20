@@ -5,6 +5,7 @@ import { type Account, SignIn, useAccount } from "@/components/account-panel";
 import { AdvicePanel, type AdviceStatus } from "@/components/advice-panel";
 import { Hand } from "@/components/hand";
 import { HistoryPanel } from "@/components/history-panel";
+import { SoundToggle, useGameSounds } from "@/components/sound";
 import { Table } from "@/components/table";
 import type { Difficulty } from "@/lib/bots/bots";
 import type { Card } from "@/lib/engine/cards";
@@ -15,6 +16,7 @@ import { rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
 import { OnlineError, callOnline, onlineClient } from "@/lib/online/client";
 import { TAKEOVER_AFTER_MS } from "@/lib/online/room-logic";
+import { playSound } from "@/lib/sound/play";
 
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 const ROOM_KEY = "big2.room.v1";
@@ -229,6 +231,7 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
     reported.current = deadline;
     void callOnline("timeout", { roomId }).then(() => reload(), () => undefined);
   }, [deadline, now, reload, roomId]);
+  useGameSounds(state, me);
 
   if (missing) {
     return (
@@ -254,7 +257,10 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
           {room.turn_seconds ? ` · ${room.turn_seconds}S TURNS` : ""} · HINTS {room.hints ? "ON" : "OFF"}
         </span>
       </div>
-      <button type="button" onClick={onLeave} className={`${button} px-3 py-2 bg-card font-mono text-xs shadow-brutal-sm`}>LEAVE ROOM</button>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <SoundToggle />
+        <button type="button" onClick={onLeave} className={`${button} px-3 py-2 bg-card font-mono text-xs shadow-brutal-sm`}>LEAVE ROOM</button>
+      </div>
     </div>
   );
 
@@ -297,6 +303,8 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
     if (await send("move", { cards })) {
       setSelected([]);
       setAdvice({ kind: "idle" });
+    } else {
+      playSound("nope");
     }
   }
 
@@ -339,7 +347,10 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
             selected={selected}
             playable={myTurn ? new Set(legal.flat()) : new Set(hand)}
             groups={[]}
-            onToggle={(c) => setSelected((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))}
+            onToggle={(c) => {
+              playSound("select");
+              setSelected((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
+            }}
             onSlideSelect={setSelected}
             onReorder={setOrder}
           />

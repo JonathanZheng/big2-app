@@ -6,6 +6,7 @@ import { Hand } from "@/components/hand";
 import { HistoryPanel } from "@/components/history-panel";
 import { ReviewPanel } from "@/components/review-panel";
 import { CardFace } from "@/components/card";
+import { SoundToggle, useGameSounds } from "@/components/sound";
 import { Table } from "@/components/table";
 import { type Difficulty, botMove } from "@/lib/bots/bots";
 import { smartMove } from "@/lib/bots/smart";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/session/match";
 import { analyseGame } from "@/lib/session/analysis";
 import { attachAnalysis, gameRecord, saveGameRecord } from "@/lib/session/profile";
+import { playSound } from "@/lib/sound/play";
 import { saveReview } from "@/lib/session/saved-reviews";
 import { recordGame, recordMatch } from "@/lib/session/stats";
 
@@ -311,6 +313,8 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const playable = useMemo(() => new Set(legal.flat()), [legal]);
   const canPlay = myTurn && selected.length > 0 && legalKeys.has(key(selected));
   const canPass = myTurn && legalKeys.has("");
+  // On a shared device the hand-off screen announces turns, and every win is someone's.
+  useGameSounds(game, friends ? null : 0);
 
   const baseOrder = useMemo(() => {
     if (handSeat === null) return [];
@@ -404,6 +408,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const play = useCallback(() => {
     if (myTurn && selected.length > 0 && !canPlay) {
       setRefusal({ cards: selected, reason: whyIllegal(game, selected, names), at: Date.now() });
+      playSound("nope");
       return;
     }
     if (!canPlay) return;
@@ -493,6 +498,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   function toggle(card: Card) {
     if (handSeat === null) return;
     setLastTapped(card);
+    playSound("select");
     comboIndex.current = -1;
     setSelected((s) => (s.includes(card) ? s.filter((c) => c !== card) : [...s, card]));
   }
@@ -550,6 +556,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
             <option value="fast">FAST</option>
           </select>
         </label>
+          <SoundToggle />
           <button type="button" onClick={() => setLeaving("restart")}
             className={`${button} px-3 py-1.5 min-h-9 bg-card font-mono`}>RESTART</button>
           <button type="button" onClick={() => setLeaving("exit")}
