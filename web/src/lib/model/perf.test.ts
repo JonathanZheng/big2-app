@@ -5,6 +5,7 @@ import { parseCards } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "./encoding";
+import { MODEL } from "./current";
 import { Network, type WeightsManifest } from "./network";
 
 // Coverage instrumentation slows the model several times over, so timings
@@ -15,8 +16,8 @@ const coverageRun = (globalThis as { __vitest_worker__?: { config?: { coverage?:
 
 it.skipIf(coverageRun)("finds and scores every move of a hand with many five-card options in under 300 ms", () => {
   const dir = path.resolve(__dirname, "../../../public/model");
-  const manifest = JSON.parse(readFileSync(path.join(dir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
-  const bytes = readFileSync(path.join(dir, "selfplay_v2.bin"));
+  const manifest = JSON.parse(readFileSync(path.join(dir, `${MODEL}.json`), "utf8")) as WeightsManifest;
+  const bytes = readFileSync(path.join(dir, `${MODEL}.bin`));
   const net = Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 
   const hand = parseCards("3d 3c 4d 4c 5d 5c 6d 6c 7d 7c 8d 8c 9d").sort((a, b) => a - b);

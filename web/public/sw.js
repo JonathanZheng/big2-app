@@ -1,8 +1,12 @@
 // Offline support: keeps the app pages, scripts and the model so bots and
-// Best move work without a connection. Bump CACHE to drop old files.
-const CACHE = "big2-v2";
+// Best move work without a connection. The page registers this file as
+// /sw.js?model=<name> (web/src/lib/model/current.json), so a new model gets a
+// new cache by itself. Bump VERSION to drop old files for any other reason.
+const VERSION = 3;
+const MODEL_NAME = new URL(self.location.href).searchParams.get("model");
+const CACHE = `big2-${VERSION}-${MODEL_NAME}`;
 const PAGES = ["/", "/play", "/friends", "/best-move", "/rules", "/profile"];
-const MODEL = ["/model/selfplay_v2.json", "/model/selfplay_v2.bin"];
+const MODEL = MODEL_NAME ? [`/model/${MODEL_NAME}.json`, `/model/${MODEL_NAME}.bin`] : [];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

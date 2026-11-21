@@ -131,10 +131,12 @@ Give `SOAK` in whole minutes and keep it under an hour, since a test player's si
 
 Hard bots, hints, Best move, reviews and online server-side bots use
 `selfplay_v2` (`public/model/selfplay_v2.json` and `.bin`). See the
-[training and validation report](../docs/training/selfplay-v2.md). The Python
-export scripts select `models/selfplay_v2.pt`; v1 remains available for comparison.
-The worker, fallback and server load the same version. Service-worker cache
-`big2-v2` refreshes offline assets on update; existing open pages may need a reload.
+[training and validation report](../docs/training/selfplay-v2.md).
+`src/lib/model/current.json` is the one place that names the current model and
+its parent: the worker, fallback, server, service worker, tests, Python export
+scripts and `benchmark.py best` all read it. v1 remains available for comparison.
+The service worker is registered with the model name, so a new model gets a new
+offline cache by itself; existing open pages may need a reload.
 
 The 301 Python parity positions were regenerated for v2. Daily puzzle positions
 are preserved and their expected best moves are rescored using
