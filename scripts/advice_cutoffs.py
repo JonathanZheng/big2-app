@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from big2_ai.agents import select_action_smart_bot  # noqa: E402
 from big2_ai.env import Big2Game, get_legal_moves  # noqa: E402
 from big2_ai.env.selfplay_encoding import encode_moves, encode_state  # noqa: E402
+from big2_ai.models.current import MODEL_PATH  # noqa: E402
 from big2_ai.models.selfplay_network import SelfPlayNetwork  # noqa: E402
 from big2_ai.training.selfplay import choose_move  # noqa: E402
 
@@ -45,7 +46,7 @@ def label(drop):
 def main():
     torch.set_num_threads(1)
     model = SelfPlayNetwork()
-    model.load_state_dict(torch.load("models/selfplay_v2.pt", map_location="cpu")["model_state_dict"])
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu")["model_state_dict"])
     model.eval()
     counts = Counter()
     for seed in range(GAMES):

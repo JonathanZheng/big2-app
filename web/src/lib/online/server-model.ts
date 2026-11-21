@@ -6,6 +6,7 @@ import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "@/lib/model/encoding";
+import { MODEL } from "@/lib/model/current";
 import { Network, type WeightsManifest } from "@/lib/model/network";
 
 let loading: Promise<{ best: (state: GameState, player: number) => Card[] }> | null = null;
@@ -14,8 +15,8 @@ export function serverModel() {
   loading ??= (async () => {
     const dir = path.join(process.cwd(), "public", "model");
     const [manifest, bytes] = await Promise.all([
-      readFile(path.join(dir, "selfplay_v2.json"), "utf8").then((t) => JSON.parse(t) as WeightsManifest),
-      readFile(path.join(dir, "selfplay_v2.bin")),
+      readFile(path.join(dir, `${MODEL}.json`), "utf8").then((t) => JSON.parse(t) as WeightsManifest),
+      readFile(path.join(dir, `${MODEL}.bin`)),
     ]);
     const net = Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     return {

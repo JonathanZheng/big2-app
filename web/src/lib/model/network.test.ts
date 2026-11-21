@@ -3,11 +3,12 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { GameState } from "@/lib/engine/game";
 import { STATE_DIM, encodeState } from "./encoding";
+import { MODEL } from "./current";
 import { Network, type WeightsManifest } from "./network";
 
 const dir = path.resolve(__dirname, "../../../public/model");
-const manifest = JSON.parse(readFileSync(path.join(dir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
-const bytes = readFileSync(path.join(dir, "selfplay_v2.bin"));
+const manifest = JSON.parse(readFileSync(path.join(dir, `${MODEL}.json`), "utf8")) as WeightsManifest;
+const bytes = readFileSync(path.join(dir, `${MODEL}.bin`));
 const weights = () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 const layer = (name: string) => manifest.layers.find((l) => l.name === name)!;
 const withLayer = (name: string, change: object): WeightsManifest =>

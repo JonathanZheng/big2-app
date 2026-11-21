@@ -3,7 +3,7 @@
 Agents:
     smart         Smart heuristic bot (Patwa 2026)
     greedy        Greedy bot
-    best          models/selfplay_v2.pt, the current best model
+    best          The current best model, named in web/src/lib/model/current.json
     <path>.pt     A self-play checkpoint
 
 Examples:
@@ -20,10 +20,11 @@ import torch
 
 from big2_ai.env import Big2Game
 from big2_ai.agents import select_action_greedy_bot, select_action_smart_bot
+from big2_ai.models.current import MODEL_PATH
 from big2_ai.models.selfplay_network import SelfPlayNetwork
 from big2_ai.training.selfplay import choose_move
 
-BEST_MODEL_PATH = "models/selfplay_v2.pt"
+BEST_MODEL_PATH = str(MODEL_PATH)
 
 _agents = {}
 

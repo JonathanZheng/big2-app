@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import fixtures from "@/lib/engine/__fixtures__/positions.json";
 import { type Fixture, stateFromFixture } from "@/lib/engine/game";
+import { MODEL, MODEL_URLS, PARENT_MODEL } from "./current";
 import { STATE_DIM, encodeState } from "./encoding";
 import { Network, type WeightsManifest } from "./network";
 
@@ -10,10 +11,19 @@ const positions = fixtures as Fixture[];
 const modelDir = path.resolve(__dirname, "../../../public/model");
 
 function loadNetwork(): Network {
-  const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
-  const bytes = readFileSync(path.join(modelDir, "selfplay_v2.bin"));
+  const manifest = JSON.parse(readFileSync(path.join(modelDir, `${MODEL}.json`), "utf8")) as WeightsManifest;
+  const bytes = readFileSync(path.join(modelDir, `${MODEL}.bin`));
   return Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
+
+describe("current model", () => {
+  it("ships files whose manifest names the current model and its parent", () => {
+    const manifest = JSON.parse(readFileSync(path.join(modelDir, `${MODEL}.json`), "utf8"));
+    expect(manifest.model).toBe(MODEL);
+    expect(manifest.parent_model).toBe(PARENT_MODEL);
+    expect(MODEL_URLS).toEqual({ manifest: `/model/${MODEL}.json`, weights: `/model/${MODEL}.bin` });
+  });
+});
 
 describe("encodeState", () => {
   it("matches the Python encoding on every fixture position", () => {
@@ -38,8 +48,8 @@ describe("Network", () => {
   });
 
   it("rejects empty, truncated and non-float32 weights instead of scoring with them", () => {
-    const manifest = JSON.parse(readFileSync(path.join(modelDir, "selfplay_v2.json"), "utf8")) as WeightsManifest;
-    const bytes = readFileSync(path.join(modelDir, "selfplay_v2.bin"));
+    const manifest = JSON.parse(readFileSync(path.join(modelDir, `${MODEL}.json`), "utf8")) as WeightsManifest;
+    const bytes = readFileSync(path.join(modelDir, `${MODEL}.bin`));
     const exact = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     expect(() => Network.fromBuffers(manifest, new ArrayBuffer(0))).toThrow("empty");
     expect(() => Network.fromBuffers(manifest, exact.slice(0, 1000))).toThrow("outside");

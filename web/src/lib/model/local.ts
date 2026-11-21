@@ -3,6 +3,7 @@ import type { GameState } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
 import type { Scored } from "./client";
 import { encodeState } from "./encoding";
+import { MODEL_URLS } from "./current";
 import { Network, type WeightsManifest } from "./network";
 
 export interface LocalScorer {
@@ -11,11 +12,11 @@ export interface LocalScorer {
 
 export async function createLocalScorer(): Promise<LocalScorer> {
   const [manifest, weights] = await Promise.all([
-    fetch("/model/selfplay_v2.json").then((response) => {
+    fetch(MODEL_URLS.manifest).then((response) => {
       if (!response.ok) throw new Error(`Model manifest: HTTP ${response.status}`);
       return response.json() as Promise<WeightsManifest>;
     }),
-    fetch("/model/selfplay_v2.bin").then((response) => {
+    fetch(MODEL_URLS.weights).then((response) => {
       if (!response.ok) throw new Error(`Model weights: HTTP ${response.status}`);
       return response.arrayBuffer();
     }),

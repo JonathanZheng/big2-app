@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from big2_ai.env import Big2Game, get_legal_moves  # noqa: E402
 from big2_ai.env.game import Move  # noqa: E402
 from big2_ai.env.selfplay_encoding import encode_moves, encode_state  # noqa: E402
+from big2_ai.models.current import MODEL_NAME, MODEL_PATH  # noqa: E402
 from big2_ai.models.selfplay_network import SelfPlayNetwork  # noqa: E402
 from big2_ai.training.selfplay import choose_move  # noqa: E402
 
@@ -72,7 +73,7 @@ def main():
     args = parser.parse_args()
     torch.set_num_threads(1)
     model = SelfPlayNetwork()
-    model.load_state_dict(torch.load("models/selfplay_v2.pt", map_location="cpu")["model_state_dict"])
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu")["model_state_dict"])
     model.eval()
     if args.rescore:
         puzzles = json.loads(OUT.read_text())
@@ -86,7 +87,7 @@ def main():
             game.move_history = [Move(m['cards'], m['player']) for m in p['history']]
             p['best'] = sorted(choose_move(model, game, game.current_player)[0].cards)
         OUT.write_text(json.dumps(puzzles, separators=(",", ":")))
-        print(f'Rescored {len(puzzles)} existing puzzle positions with selfplay_v2')
+        print(f'Rescored {len(puzzles)} existing puzzle positions with {MODEL_NAME}')
         return
     puzzles = []
     seed = 50_000

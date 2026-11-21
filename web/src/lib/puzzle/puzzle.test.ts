@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "@/lib/model/encoding";
+import { MODEL } from "@/lib/model/current";
 import { Network, type WeightsManifest } from "@/lib/model/network";
 import { readQueue } from "@/lib/account/store";
 import { signedIn } from "@/lib/account/test-helpers";
@@ -23,8 +24,8 @@ describe("puzzles.json", () => {
   });
 
   it("gets the same best move from the browser model as from Python", () => {
-    const manifest = JSON.parse(readFileSync(path.join(publicDir, "model/selfplay_v2.json"), "utf8")) as WeightsManifest;
-    const bytes = readFileSync(path.join(publicDir, "model/selfplay_v2.bin"));
+    const manifest = JSON.parse(readFileSync(path.join(publicDir, `model/${MODEL}.json`), "utf8")) as WeightsManifest;
+    const bytes = readFileSync(path.join(publicDir, `model/${MODEL}.bin`));
     const net = Network.fromBuffers(manifest, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     for (const p of puzzles) {
       const state = puzzleState(p);

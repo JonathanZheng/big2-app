@@ -3,6 +3,7 @@
 import type { GameState } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
 import { encodeState } from "./encoding";
+import { MODEL_URLS } from "./current";
 import { Network, type WeightsManifest } from "./network";
 
 export type WorkerRequest = { id: number; state: GameState; player: number };
@@ -12,11 +13,11 @@ export type WorkerResponse =
 
 const network: Promise<Network> = (async () => {
   const [manifest, weights] = await Promise.all([
-    fetch("/model/selfplay_v2.json").then((r) => {
+    fetch(MODEL_URLS.manifest).then((r) => {
       if (!r.ok) throw new Error(`Model manifest: HTTP ${r.status}`);
       return r.json() as Promise<WeightsManifest>;
     }),
-    fetch("/model/selfplay_v2.bin").then((r) => {
+    fetch(MODEL_URLS.weights).then((r) => {
       if (!r.ok) throw new Error(`Model weights: HTTP ${r.status}`);
       return r.arrayBuffer();
     }),

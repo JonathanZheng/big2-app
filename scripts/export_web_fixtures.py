@@ -20,11 +20,11 @@ from big2_ai.agents import select_action_greedy_bot, select_action_smart_bot
 from big2_ai.env import Big2Game, get_legal_moves
 from big2_ai.env.game import Move
 from big2_ai.env.selfplay_encoding import encode_moves, encode_state
+from big2_ai.models.current import MODEL_PATH
 from big2_ai.models.selfplay_network import SelfPlayNetwork
 from big2_ai.training.selfplay import choose_move
 
 OUT = Path("web/src/lib/engine/__fixtures__/positions.json")
-MODEL = "models/selfplay_v2.pt"
 
 
 def canonical(moves):
@@ -58,7 +58,7 @@ def snapshot(game, model):
 def main():
     torch.set_num_threads(1)
     model = SelfPlayNetwork()
-    model.load_state_dict(torch.load(MODEL, map_location="cpu")["model_state_dict"])
+    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu")["model_state_dict"])
     model.eval()
 
     positions = [snapshot(Big2Game(seed=1000), model)]  # an opening position
