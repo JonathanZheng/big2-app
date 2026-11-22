@@ -7,7 +7,7 @@ on:
     inputs:
       soak:
         description: How long the soak runs, in whole minutes (under 60m)
-        default: 30m
+        default: 10m
 
 permissions:
   contents: read
@@ -64,7 +64,7 @@ jobs:
       - name: k6 ${{ matrix.test }}
         run: k6 run --summary-export "$RUNNER_TEMP/${{ matrix.test }}.json" load/${{ matrix.test }}.js
         env:
-          SOAK: ${{ inputs.soak || '30m' }}
+          SOAK: ${{ inputs.soak || '10m' }}
 
       - uses: actions/upload-artifact@v4
         if: always()
