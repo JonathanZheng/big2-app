@@ -1,6 +1,7 @@
 import { CardFace, CardRow } from "@/components/card";
 import { type Card, rank, suit } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
+import { rulesOf } from "@/lib/engine/rules";
 import { SEAT_NAMES } from "@/lib/session/match";
 
 /** What a seat did most recently in the current trick, and where in the history it did it. */
@@ -104,7 +105,7 @@ export function Table({ game, thinking, names = SEAT_NAMES, seats = [1, 2, 3], y
           <span>
             {game.lastPlay
               ? `TO BEAT: ${names[game.lastPlay.player].toUpperCase()}`
-              : game.firstMove
+              : game.firstMove && rulesOf(game).opening === "three"
                 ? "OPENING: MUST INCLUDE 3♦"
                 : names[game.current] === "You" ? "YOU LEAD" : `${names[game.current].toUpperCase()} LEADS`}
           </span>

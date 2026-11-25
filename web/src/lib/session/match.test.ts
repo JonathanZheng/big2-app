@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { smartMove } from "@/lib/bots/smart";
+import { legalMoves } from "@/lib/engine/legal";
 import {
   type MatchState, endMatch, humanSeats, isBotSeat, matchWinners, nextGame, playMove, seatNames, startMatch,
 } from "./match";
@@ -77,5 +78,19 @@ describe("one device seats", () => {
 describe("humanSeats default", () => {
   it("seats four people at one device when the count is not given", () => {
     expect(humanSeats({ difficulty: "easy", games: 1, mode: "friends" } as Parameters<typeof humanSeats>[0])).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe("house rules", () => {
+  it("deals every game of the match with the chosen rules", () => {
+    const rules = { opening: "any", flush: "rank", pass: "out" } as const;
+    let m = startMatch({ difficulty: "easy", games: 3, rules }, 5);
+    expect(m.game.rules).toEqual(rules);
+    while (m.game.winner === null) m = playMove(m, legalMoves(m.game, m.game.current).find((x) => x.length > 0) ?? []);
+    expect(nextGame(m).game.rules).toEqual(rules);
+  });
+
+  it("leaves standard games without rules", () => {
+    expect(startMatch({ difficulty: "easy", games: 1 }, 5).game).not.toHaveProperty("rules");
   });
 });

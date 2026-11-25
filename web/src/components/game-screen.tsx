@@ -14,6 +14,7 @@ import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
 import { whyIllegal } from "@/lib/engine/explain";
 import { legalMoves } from "@/lib/engine/legal";
+import { RULE_CHOICES, type Rules, STANDARD_RULES, houseRuleTags, isStandard } from "@/lib/engine/rules";
 import {
   type SortMode, comboAnchor, combosContaining, groupCards, keepOrder, readSortPreference, saveSortPreference, sortHand,
 } from "@/lib/hand/sort";
@@ -192,6 +193,39 @@ function LengthPicker({ games, setGames }: { games: MatchConfig["games"]; setGam
   );
 }
 
+function RulesPicker({ rules, setRules }: { rules: Rules; setRules: (r: Rules) => void }) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-extrabold mb-3">HOUSE RULES</legend>
+      <div className="flex flex-col gap-4">
+        {RULE_CHOICES.map(({ key, label, options }) => (
+          <div key={key} role="group" aria-label={label} className="flex flex-col gap-2">
+            <span className="font-mono text-xs">{label}</span>
+            <div className="flex flex-wrap gap-3">
+              {options.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  aria-pressed={rules[key] === o.value}
+                  onClick={() => setRules({ ...rules, [key]: o.value })}
+                  className={`${button} px-4 py-3 shadow-brutal-sm ${rules[key] === o.value ? "bg-accent" : "bg-card"}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 font-mono text-xs">
+        {isStandard(rules)
+          ? "STANDARD RULES."
+          : "THE BOTS AND HINTS LEARNED THE STANDARD RULES, SO THEY PLAY A LITTLE WEAKER UNDER HOUSE RULES."}
+      </p>
+    </fieldset>
+  );
+}
+
 function BotsSetup({ modelStatus, modelError, onRetry, onStart }: {
   modelStatus: ModelStatus;
   modelError: string | null;
@@ -200,15 +234,17 @@ function BotsSetup({ modelStatus, modelError, onRetry, onStart }: {
 }) {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [games, setGames] = useState<MatchConfig["games"]>(5);
+  const [rules, setRules] = useState<Rules>(STANDARD_RULES);
   return (
     <section className="flex flex-col gap-8 max-w-3xl">
       <h1 className="text-5xl font-black tracking-tight leading-none">VS BOTS</h1>
       <DifficultyPicker difficulty={difficulty} setDifficulty={setDifficulty} modelStatus={modelStatus}
         modelError={modelError} onRetry={onRetry} />
       <LengthPicker games={games} setGames={setGames} />
+      <RulesPicker rules={rules} setRules={setRules} />
       <button
         type="button"
-        onClick={() => onStart({ difficulty, games })}
+        onClick={() => onStart({ difficulty, games, rules })}
         className={`${button} self-start bg-ink text-paper text-2xl px-8 py-4 shadow-brutal`}
       >
         START
@@ -226,6 +262,7 @@ function FriendsSetup({ modelStatus, modelError, onRetry, onStart }: {
   const [humans, setHumans] = useState(4);
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [games, setGames] = useState<MatchConfig["games"]>(5);
+  const [rules, setRules] = useState<Rules>(STANDARD_RULES);
   return (
     <section className="flex flex-col gap-8 max-w-3xl">
       <div className="flex flex-col gap-3">
@@ -259,9 +296,10 @@ function FriendsSetup({ modelStatus, modelError, onRetry, onStart }: {
           modelError={modelError} onRetry={onRetry} />
       )}
       <LengthPicker games={games} setGames={setGames} />
+      <RulesPicker rules={rules} setRules={setRules} />
       <button
         type="button"
-        onClick={() => onStart({ mode: "friends", humans, difficulty, games })}
+        onClick={() => onStart({ mode: "friends", humans, difficulty, games, rules })}
         className={`${button} self-start bg-ink text-paper text-2xl px-8 py-4 shadow-brutal`}
       >
         START
@@ -534,12 +572,14 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   const handoff = friends && game.winner === null && humans.includes(game.current) && viewer !== game.current;
   const scoreboard = match.wins.map((wins, seat) => `${shortName(names[seat])} ${wins}`).join("  ");
   const difficultyLabel = friends && humans.length === 4 ? "NO BOTS" : match.config.difficulty.toUpperCase();
+  const ruleTags = houseRuleTags(match.config.rules ?? STANDARD_RULES);
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
         <span>
           {difficultyLabel} ·{" "}
+          {ruleTags.length > 0 && `HOUSE RULES: ${ruleTags.join(", ")} · `}
           {match.config.games === 1 ? "SINGLE GAME" : `GAME ${match.gameIndex + 1} OF ${match.config.games}`} · WINS{" "}
           {scoreboard}
         </span>

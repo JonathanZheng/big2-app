@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import type { Difficulty } from "@/lib/bots/bots";
 import type { Card } from "@/lib/engine/cards";
 import { type GameState, applyMove, deal } from "@/lib/engine/game";
+import { type Rules, isStandard, parseRules } from "@/lib/engine/rules";
 import {
   type Seat, autoMove, canTakeOver, nextDeadline, roomCode, runBots, statsDelta,
 } from "./room-logic";
@@ -43,13 +44,14 @@ export async function setDisplayName(user: User, name: string) {
 }
 
 export async function createRoom(user: User, settings: {
-  difficulty: Difficulty; games: 1 | 3 | 5 | 10; hints: boolean; turnSeconds: number | null;
+  difficulty: Difficulty; games: 1 | 3 | 5 | 10; hints: boolean; turnSeconds: number | null; rules: Rules;
 }) {
   const name = await displayName(user);
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data, error } = await admin().from("rooms").insert({
       code: roomCode(rng), host: user.id, difficulty: settings.difficulty, games: settings.games,
       hints: settings.hints, turn_seconds: settings.turnSeconds,
+      rules: isStandard(settings.rules) ? null : settings.rules,
     }).select("id, code").single();
     if (error?.code === "23505") continue; // code already used: try another
     if (error || !data) throw new HttpError(500, error?.message ?? "Could not create the room.");
@@ -86,6 +88,11 @@ export async function joinRoom(user: User, code: string) {
     .eq("room_id", room.id).eq("user_id", user.id)) as unknown[];
   if (seated.length > 0) return { id: room.id };
   throw new HttpError(409, "That room is full.");
+}
+
+/** A fresh deal under the room's house rules. */
+function dealFor(loaded: LoadedRoom): GameState {
+  return deal(rng, parseRules(loaded.room.rules) ?? undefined);
 }
 
 /** Bots move, the timer is set, and a finished game is scored, then everything is saved. */
@@ -131,7 +138,8 @@ export async function startRoom(user: User, roomId: string) {
     check(await admin().from("room_seats").update({ bot: true, display_name: `Bot ${botNumber}` })
       .eq("room_id", roomId).eq("seat", s.seat).is("user_id", null));
   }
-  await advance(await loadRoom(roomId), deal(rng), null);
+  const ready = await loadRoom(roomId);
+  await advance(ready, dealFor(ready), null);
 }
 
 export async function nextRoomGame(user: User, roomId: string) {
@@ -142,7 +150,7 @@ export async function nextRoomGame(user: User, roomId: string) {
   }
   check(await admin().from("rooms").update({ game_index: loaded.room.game_index + 1 }).eq("id", roomId));
   loaded.room.game_index += 1;
-  await advance(loaded, deal(rng), loaded.game.version);
+  await advance(loaded, dealFor(loaded), loaded.game.version);
 }
 
 export async function makeMove(user: User, roomId: string, cards: Card[]) {

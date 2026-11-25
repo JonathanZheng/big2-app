@@ -11,6 +11,7 @@ import type { Difficulty } from "@/lib/bots/bots";
 import type { Card } from "@/lib/engine/cards";
 import type { GameState, Play } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
+import { RULE_CHOICES, type Rules, STANDARD_RULES, houseRuleTags, isStandard, parseRules } from "@/lib/engine/rules";
 import { sortHand, keepOrder } from "@/lib/hand/sort";
 import { rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
@@ -34,6 +35,8 @@ interface RoomView {
   turn_seconds: number | null;
   game_index: number;
   wins: number[];
+  /** House rules, or null for the standard rules. */
+  rules: Rules | null;
 }
 interface SeatView { seat: number; user_id: string | null; display_name: string | null; bot: boolean; last_seen: string | null }
 interface GameView {
@@ -77,6 +80,7 @@ function Lobby({ account, joinCode, onEnter }: { account: Account; joinCode: str
   const [games, setGames] = useState(1);
   const [hints, setHints] = useState(false);
   const [turnSeconds, setTurnSeconds] = useState<number | null>(null);
+  const [rules, setRules] = useState<Rules>(STANDARD_RULES);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const joined = useRef(false);
@@ -129,7 +133,19 @@ function Lobby({ account, joinCode, onEnter }: { account: Account; joinCode: str
           <button type="button" aria-pressed={!hints} onClick={() => setHints(false)} className={pick(!hints)}>OFF</button>
           <button type="button" aria-pressed={hints} onClick={() => setHints(true)} className={pick(hints)}>ON FOR EVERYONE</button>
         </div>
-        <button type="button" disabled={busy} onClick={() => void run(() => callOnline("create", { difficulty, games, hints, turnSeconds }))}
+        {RULE_CHOICES.map(({ key, label, options }) => (
+          <div key={key} role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-extrabold w-24">{label}</span>
+            {options.map((o) => (
+              <button key={o.value} type="button" aria-pressed={rules[key] === o.value}
+                onClick={() => setRules({ ...rules, [key]: o.value })} className={pick(rules[key] === o.value)}>{o.label}</button>
+            ))}
+          </div>
+        ))}
+        {!isStandard(rules) && (
+          <p className="font-mono text-xs">THE BOTS AND HINTS LEARNED THE STANDARD RULES, SO THEY PLAY A LITTLE WEAKER UNDER HOUSE RULES.</p>
+        )}
+        <button type="button" disabled={busy} onClick={() => void run(() => callOnline("create", { difficulty, games, hints, turnSeconds, rules }))}
           className={`${button} self-start px-6 py-3 bg-ink text-paper shadow-brutal`}>CREATE ROOM</button>
       </section>
       <section className="border-3 border-ink bg-card p-5 shadow-brutal flex flex-col gap-4">
@@ -216,12 +232,14 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
     return () => { clearInterval(timer); clearInterval(tick); client.current?.dispose(); };
   }, [roomId]);
 
+  const roomRules = useMemo(() => (room === null ? null : parseRules(room.rules)), [room]);
   // The game as this player sees it: their own hand, and only card counts for everyone else.
   const state: GameState | null = useMemo(() => game && me !== null ? {
     hands: game.counts.map((n, s) => (s === me ? hand : Array<number>(n).fill(-1))),
     current: game.current, firstMove: game.first_move, lastPlay: game.last_play, passes: game.passes,
     history: game.history, winner: game.winner,
-  } : null, [game, hand, me]);
+    ...(roomRules ? { rules: roomRules } : {}),
+  } : null, [game, hand, me, roomRules]);
 
   const deadline = game?.turn_deadline ? Date.parse(game.turn_deadline) : null;
   const secondsLeft = deadline === null ? null : Math.max(0, Math.ceil((deadline - now) / 1000));
@@ -248,6 +266,7 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
   const shareLink = typeof window === "undefined" ? "" : `${window.location.origin}/friends?room=${room.code}`;
   const away = (s: SeatView) => !s.bot && s.user_id !== null && (!s.last_seen || now - Date.parse(s.last_seen) > TAKEOVER_AFTER_MS);
 
+  const ruleTags = houseRuleTags(parseRules(room.rules) ?? STANDARD_RULES);
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-col gap-1">
@@ -255,6 +274,7 @@ function Room({ roomId, account, onLeave }: { roomId: string; account: Account; 
         <span className="font-mono text-xs">
           {room.difficulty.toUpperCase()} BOTS · {room.games === 1 ? "SINGLE GAME" : `GAME ${room.game_index + 1} OF ${room.games}`}
           {room.turn_seconds ? ` · ${room.turn_seconds}S TURNS` : ""} · HINTS {room.hints ? "ON" : "OFF"}
+          {ruleTags.length > 0 && ` · HOUSE RULES: ${ruleTags.join(", ")}`}
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs">

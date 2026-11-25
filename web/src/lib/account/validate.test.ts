@@ -71,12 +71,18 @@ describe("parseBundle", () => {
     rejects({ games: [{ ...game(1), analysis: { ...analysis, best: undefined } }] });
   });
 
+  it("accepts a review of a house rules game", () => {
+    const rules = { opening: "any", flush: "suit", pass: "out" };
+    expect(parseBundle({ reviews: [{ ...review("r1"), final: { ...final, rules } }] })?.reviews[0].final.rules).toEqual(rules);
+  });
+
   it("rejects a review missing the fields the review screen reads", () => {
     rejects({ reviews: [{ ...review("r1"), at: 1.5 }] });
     rejects({ reviews: [{ ...review("r1"), title: 7 }] });
     rejects({ reviews: [{ ...review("r1"), final: {} }] });
     rejects({ reviews: [{ ...review("r1"), final: { ...final, history: [{ player: 0, cards: "x" }] } }] });
     rejects({ reviews: [{ ...review("r1"), final: { ...final, hands: [[60]] } }] });
+    rejects({ reviews: [{ ...review("r1"), final: { ...final, rules: { opening: "any" } } }] });
     rejects({ reviews: [{ ...review("r1"), names: [1] }] });
     rejects({ reviews: [{ ...review("r1"), seats: ["1"] }] });
     rejects({ reviews: [{ ...review("r1"), youSeat: 4 }] });

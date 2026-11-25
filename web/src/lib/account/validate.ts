@@ -1,4 +1,5 @@
 /** Shape and size checks for history sent to /api/history. */
+import { parseRules } from "@/lib/engine/rules";
 import type { Label } from "@/lib/model/advice";
 import type { PuzzleResult } from "@/lib/puzzle/puzzle";
 import type { GameRecord } from "@/lib/session/profile";
@@ -49,6 +50,7 @@ const isPlay = (p: unknown) => isObject(p) && isSeat(p.player) && isCards(p.card
 function isReview(r: unknown): r is SavedReview {
   return isObject(r) && shortString(r.id, 100) && isTime(r.at) && shortString(r.title, 200)
     && isObject(r.final) && arrayOf(r.final.hands, 4, isCards) && arrayOf(r.final.history, 1000, isPlay)
+    && (r.final.rules === undefined || parseRules(r.final.rules) !== null)
     && arrayOf(r.names, 4, (n) => typeof n === "string" && n.length <= 100)
     && arrayOf(r.seats, 4, (s) => isSeat(s)) && isSeat(r.youSeat, -1) && arrayOf(r.players, 4, (s) => isSeat(s))
     && typeof r.scoreAll === "boolean"

@@ -82,6 +82,21 @@ export default function RulesPage() {
         </ol>
       </Section>
 
+      <Section title="HOUSE RULES">
+        <p>
+          Tables play Big 2 a little differently. Before a game, or when creating an online room, you can change
+          three rules. The ones above are the standard rules.
+        </p>
+        <ul className="list-disc pl-5 flex flex-col gap-1.5">
+          <li><strong>Opening play:</strong> any play. Whoever holds the 3♦ still starts, but their first move does not have to include it.</li>
+          <li><strong>Flushes:</strong> suit first. A flush in a higher suit beats any flush in a lower suit; in the same suit, the highest card decides.</li>
+          <li><strong>After a pass:</strong> out until the trick ends. Once you pass you cannot play again in that trick, and the game passes for you.</li>
+        </ul>
+        <p>
+          The bots and hints learned the standard rules. They still play under house rules, a little weaker.
+        </p>
+      </Section>
+
       <Section title="THE BOT'S ADVICE">
         <p>
           <strong>Evaluation:</strong> one number for the position. 0 means even, the 1 in 4 chance everyone starts

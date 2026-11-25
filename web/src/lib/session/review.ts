@@ -1,6 +1,7 @@
 /** Rebuild every position of a finished game so it can be stepped through. */
 import type { Card } from "@/lib/engine/cards";
-import { type GameState, applyMove } from "@/lib/engine/game";
+import { type GameState, replayMove } from "@/lib/engine/game";
+import { isOut } from "@/lib/engine/rules";
 
 /**
  * Positions before each recorded move, plus the final position. The finished
@@ -24,18 +25,22 @@ export function reviewStates(final: GameState): GameState[] {
     passes: 0,
     history: [],
     winner: null,
+    ...(final.rules ? { rules: final.rules } : {}),
   };
   const states = [state];
   for (const play of final.history) {
-    state = applyMove(state, play.cards);
+    state = replayMove(state, play.cards);
     states.push(state);
   }
   return states;
 }
 
-/** Steps where one of `players` was to move, with the move they made. */
+/** Steps where one of `players` chose a move, with the move they made. Automatic passes are left out. */
 export function myDecisions(final: GameState, players: number[] = [0]): { step: number; player: number; cards: Card[] }[] {
+  const states = reviewStates(final);
   return final.history.flatMap((play, index) =>
-    players.includes(play.player) ? [{ step: index, player: play.player, cards: play.cards }] : [],
+    players.includes(play.player) && !isOut(states[index], play.player)
+      ? [{ step: index, player: play.player, cards: play.cards }]
+      : [],
   );
 }
