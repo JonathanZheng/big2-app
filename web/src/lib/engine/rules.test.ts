@@ -4,7 +4,7 @@ import { type GameState, applyMove, deal, mulberry32, replayMove } from "./game"
 import { whyIllegal } from "./explain";
 import { legalMoves } from "./legal";
 import { canBeat } from "./moves";
-import { type Rules, STANDARD_RULES, isStandard, parseRules, passedThisTrick } from "./rules";
+import { type Rules, STANDARD_RULES, houseRuleTags, isStandard, parseRules, passedThisTrick } from "./rules";
 
 const sorted = (text: string) => parseCards(text).sort((a, b) => a - b);
 const has = (moves: number[][], text: string) => moves.some((m) => m.join(",") === sorted(text).join(","));
@@ -34,6 +34,11 @@ describe("parseRules", () => {
     expect(parseRules(null)).toBeNull();
     expect(parseRules("standard")).toBeNull();
     expect(parseRules([])).toBeNull();
+  });
+
+  it("names only the house rules that differ from the standard ones", () => {
+    expect(houseRuleTags(STANDARD_RULES)).toEqual([]);
+    expect(houseRuleTags({ opening: "any", flush: "rank", pass: "out" })).toEqual(["ANY OPENING", "PASS AND STAY OUT"]);
   });
 
   it("keeps only the known fields", () => {

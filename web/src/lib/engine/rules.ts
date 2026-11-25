@@ -15,12 +15,29 @@ export interface Rules {
 
 export const STANDARD_RULES: Rules = { opening: "three", flush: "rank", pass: "rejoin" };
 
-/** Every choice, in the words the setup screens show. The first option is the standard one. */
-export const RULE_CHOICES: { key: keyof Rules; label: string; options: { value: string; label: string }[] }[] = [
-  { key: "opening", label: "OPENING PLAY", options: [{ value: "three", label: "MUST INCLUDE 3♦" }, { value: "any", label: "ANY PLAY" }] },
-  { key: "flush", label: "FLUSHES", options: [{ value: "rank", label: "HIGHEST CARD FIRST" }, { value: "suit", label: "SUIT FIRST" }] },
-  { key: "pass", label: "AFTER A PASS", options: [{ value: "rejoin", label: "CAN PLAY AGAIN" }, { value: "out", label: "OUT UNTIL THE TRICK ENDS" }] },
+/**
+ * Every choice, in the words the setup screens show. The first option is the
+ * standard one; `tag` names the other in the game header.
+ */
+export const RULE_CHOICES: { key: keyof Rules; label: string; tag: string; options: { value: string; label: string }[] }[] = [
+  {
+    key: "opening", label: "OPENING PLAY", tag: "ANY OPENING",
+    options: [{ value: "three", label: "MUST INCLUDE 3♦" }, { value: "any", label: "ANY PLAY" }],
+  },
+  {
+    key: "flush", label: "FLUSHES", tag: "FLUSH BY SUIT",
+    options: [{ value: "rank", label: "HIGHEST CARD FIRST" }, { value: "suit", label: "SUIT FIRST" }],
+  },
+  {
+    key: "pass", label: "AFTER A PASS", tag: "PASS AND STAY OUT",
+    options: [{ value: "rejoin", label: "CAN PLAY AGAIN" }, { value: "out", label: "OUT UNTIL THE TRICK ENDS" }],
+  },
 ];
+
+/** Short names of the house rules in play, empty for the standard rules. */
+export function houseRuleTags(rules: Rules): string[] {
+  return RULE_CHOICES.filter(({ key }) => rules[key] !== STANDARD_RULES[key]).map((c) => c.tag);
+}
 
 export function rulesOf(state: { rules?: Rules }): Rules {
   return state.rules ?? STANDARD_RULES;
