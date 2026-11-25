@@ -46,3 +46,40 @@ describe("reviewStates before any move", () => {
     expect(reviewStates(empty)).toEqual([empty]);
   });
 });
+
+describe("house rules in review", () => {
+  const rules = { opening: "any", flush: "suit", pass: "out" } as const;
+
+  function houseGame(seed: number): GameState {
+    let m = startMatch({ difficulty: "medium", games: 1, rules }, seed);
+    while (m.game.winner === null) m = playMove(m, smartMove(m.game, m.game.current));
+    return m.game;
+  }
+
+  it("rebuilds a house rules game, automatic passes included, and keeps its rules", () => {
+    for (const seed of [21, 22, 23]) {
+      const final = houseGame(seed);
+      const states = reviewStates(final);
+      expect(states[0].rules).toEqual(rules);
+      expect(states.at(-1)!.hands).toEqual(final.hands);
+      expect(states.at(-1)!.winner).toBe(final.winner);
+    }
+  });
+
+  it("leaves automatic passes out of my decisions", () => {
+    const finals = [21, 22, 23, 24, 25].map(houseGame);
+    let skipped = 0;
+    for (const final of finals) {
+      const states = reviewStates(final);
+      const steps = new Set(myDecisions(final, [0, 1, 2, 3]).map((d) => d.step));
+      final.history.forEach((play, i) => {
+        if (steps.has(i)) return;
+        // Every move left out is a pass the player had no choice about.
+        expect(play.cards).toEqual([]);
+        expect(states[i].current).toBe(play.player);
+        skipped += 1;
+      });
+    }
+    expect(skipped).toBeGreaterThan(0);
+  });
+});

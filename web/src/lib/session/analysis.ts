@@ -4,6 +4,7 @@
  */
 import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
+import { isOut } from "@/lib/engine/rules";
 import { labelMoves } from "@/lib/model/advice";
 import type { Scored } from "@/lib/model/client";
 import { reviewStates } from "./review";
@@ -38,7 +39,7 @@ export async function analyseGame(
   };
   const states = reviewStates(final);
   for (const [i, play] of final.history.entries()) {
-    if (play.player !== seat) continue;
+    if (play.player !== seat || isOut(states[i], seat)) continue;
     const { moves, scores } = await score(states[i], seat);
     const chosen = moves.findIndex((m) => key(m) === key(play.cards));
     if (chosen < 0) continue;

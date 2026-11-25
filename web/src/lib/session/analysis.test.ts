@@ -78,3 +78,24 @@ describe("analyseGame slips", () => {
     expect(a.moves).toBe(0);
   });
 });
+
+describe("analyseGame under pass and stay out", () => {
+  it("does not score passes made for a seat that was out of the trick", async () => {
+    let state = deal(mulberry32(9), { opening: "three", flush: "rank", pass: "out" });
+    while (state.winner === null) {
+      const legal = legalMoves(state, state.current);
+      // Seat 0 passes whenever it may, so it is often out.
+      state = applyMove(state, state.current === 0 && legal[0].length === 0 ? [] : legal.find((m) => m.length > 0) ?? []);
+    }
+    const scored: number[] = [];
+    const score = async (s: GameState, player: number) => {
+      scored.push(s.history.length);
+      const moves = legalMoves(s, player);
+      return { moves, scores: Float32Array.from(moves.map(() => 0)) };
+    };
+    const a = await analyseGame(state, 0, score);
+    const mine = state.history.filter((p) => p.player === 0).length;
+    expect(a.moves).toBe(scored.length);
+    expect(a.moves).toBeLessThan(mine);
+  });
+});

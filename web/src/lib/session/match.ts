@@ -6,6 +6,7 @@
 import type { Difficulty } from "@/lib/bots/bots";
 import type { Card } from "@/lib/engine/cards";
 import { type GameState, applyMove, deal, mulberry32 } from "@/lib/engine/game";
+import type { Rules } from "@/lib/engine/rules";
 
 export const SEAT_NAMES = ["You", "West", "North", "East"];
 
@@ -19,6 +20,8 @@ export interface MatchConfig {
   mode?: GameMode;
   /** Human seats at one device, from seat 0 up. Defaults to 1. */
   humans?: number;
+  /** House rules for every game of the match. Defaults to the standard rules. */
+  rules?: Rules;
 }
 
 /** Seats occupied by people. Bots fill the empty seats after them. */
@@ -50,7 +53,7 @@ export interface MatchState {
 }
 
 export function startMatch(config: MatchConfig, seed: number): MatchState {
-  return { config, game: deal(mulberry32(seed)), gameIndex: 0, wins: [0, 0, 0, 0], over: false, seed };
+  return { config, game: deal(mulberry32(seed), config.rules), gameIndex: 0, wins: [0, 0, 0, 0], over: false, seed };
 }
 
 /** Play (or pass with `[]`) for whoever's turn it is. */
@@ -65,7 +68,7 @@ export function nextGame(m: MatchState): MatchState {
   if (m.over) throw new Error("The match is over");
   if (m.game.winner === null) throw new Error("The game is still going");
   const gameIndex = m.gameIndex + 1;
-  return { ...m, gameIndex, game: deal(mulberry32(m.seed + gameIndex * 7919)) };
+  return { ...m, gameIndex, game: deal(mulberry32(m.seed + gameIndex * 7919), m.config.rules) };
 }
 
 export function endMatch(m: MatchState): MatchState {
