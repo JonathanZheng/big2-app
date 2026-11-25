@@ -1,6 +1,7 @@
 import type { Card } from "./cards";
 import type { GameState } from "./game";
 import { MoveType, detectMoveType } from "./moves";
+import { rulesOf } from "./rules";
 
 /**
  * Why a selection cannot be played right now, in the words the table shows
@@ -8,7 +9,7 @@ import { MoveType, detectMoveType } from "./moves";
  */
 export function whyIllegal(game: GameState, cards: Card[], names: string[]): string {
   if (detectMoveType(cards) === MoveType.Invalid) return "THOSE CARDS ARE NOT A COMBINATION";
-  if (game.firstMove && !cards.includes(0)) return "THE OPENING PLAY MUST INCLUDE THE 3♦";
+  if (game.firstMove && rulesOf(game).opening === "three" && !cards.includes(0)) return "THE OPENING PLAY MUST INCLUDE THE 3♦";
   const last = game.lastPlay;
   if (!last) return "THOSE CARDS CANNOT BE PLAYED";
   const name = names[last.player].toUpperCase();

@@ -1,5 +1,6 @@
 /** Move types and comparisons, ported from big2_ai/env/move_detector.py. */
 import { type Card, rank, suit } from "./cards";
+import { type Rules, STANDARD_RULES } from "./rules";
 
 /** Numeric values match the Python MoveType enum (the model's input uses them). */
 export enum MoveType {
@@ -62,7 +63,7 @@ export function detectMoveType(cards: Card[]): MoveType {
 }
 
 /** [primary, suit] for comparing moves of the same type; higher beats lower. */
-function moveValue(cards: Card[], type: MoveType): [number, number] {
+function moveValue(cards: Card[], type: MoveType, rules: Rules): [number, number] {
   const top = Math.max(...cards);
   switch (type) {
     case MoveType.Single:
@@ -75,7 +76,8 @@ function moveValue(cards: Card[], type: MoveType): [number, number] {
       // Straight order, then the suit of the highest card (the 2 when present).
       return [straightKey(cards.map(rank)), suit(top)];
     case MoveType.Flush:
-      return [rank(top), suit(top)];
+      // Every card shares the suit, so suit first still breaks ties by the highest card.
+      return rules.flush === "suit" ? [suit(top), rank(top)] : [rank(top), suit(top)];
     case MoveType.FullHouse:
     case MoveType.Quad: {
       const need = type === MoveType.FullHouse ? 3 : 4;
@@ -96,8 +98,8 @@ const FIVE_CARD_ORDER: Partial<Record<MoveType, number>> = {
   [MoveType.StraightFlush]: 5,
 };
 
-/** Whether `cards` beats `last`. Anything beats an empty table. */
-export function canBeat(cards: Card[], last: Card[]): boolean {
+/** Whether `cards` beats `last` under `rules`. Anything beats an empty table. */
+export function canBeat(cards: Card[], last: Card[], rules: Rules = STANDARD_RULES): boolean {
   if (last.length === 0) return true;
   const type = detectMoveType(cards);
   const lastType = detectMoveType(last);
@@ -109,7 +111,7 @@ export function canBeat(cards: Card[], last: Card[]): boolean {
   } else if (type !== lastType) {
     return false;
   }
-  const [p, s] = moveValue(cards, type);
-  const [lp, ls] = moveValue(last, lastType);
+  const [p, s] = moveValue(cards, type, rules);
+  const [lp, ls] = moveValue(last, lastType, rules);
   return p > lp || (p === lp && s > ls);
 }

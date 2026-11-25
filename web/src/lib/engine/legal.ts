@@ -1,6 +1,7 @@
 import type { Card } from "./cards";
 import type { GameState } from "./game";
 import { MoveType, canBeat, detectMoveType } from "./moves";
+import { isOut, rulesOf } from "./rules";
 
 /** Pass first, then by number of cards, then by the sorted card numbers. */
 export function canonicalOrder(moves: Card[][]): Card[][] {
@@ -32,15 +33,18 @@ function subsets(cards: Card[], size: number, start = 0, picked: Card[] = [], ou
  * Enumerates all subsets of size 1, 2, 3 and 5 (at most 1,664 for 13 cards).
  */
 export function legalMoves(state: GameState, player: number): Card[][] {
+  const rules = rulesOf(state);
   const hand = [...state.hands[player]].sort((a, b) => a - b);
   const last = state.lastPlay?.cards ?? [];
+  if (isOut(state, player)) return [[]];
+  const mustOpenWith3d = state.firstMove && rules.opening === "three";
   const moves: Card[][] = last.length > 0 ? [[]] : [];
   const sizes = last.length > 0 ? [last.length] : [1, 2, 3, 5];
   for (const size of sizes) {
     for (const move of subsets(hand, size)) {
       if (detectMoveType(move) === MoveType.Invalid) continue;
-      if (state.firstMove && !move.includes(0)) continue;
-      if (canBeat(move, last)) moves.push(move);
+      if (mustOpenWith3d && !move.includes(0)) continue;
+      if (canBeat(move, last, rules)) moves.push(move);
     }
   }
   return canonicalOrder(moves);

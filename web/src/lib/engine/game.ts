@@ -1,6 +1,7 @@
 /** Game state, ported from big2_ai/env/game.py. States are immutable. */
 import type { Card } from "./cards";
 import { legalMoves } from "./legal";
+import { type Rules, isOut, isStandard } from "./rules";
 
 /** One turn: the cards played, or an empty list for a pass. */
 export interface Play {
@@ -24,6 +25,8 @@ export interface GameState {
   playedBy?: Card[][];
   /** Cards known to be out of the game with no owner (board setup only). */
   dead?: Card[];
+  /** House rules. Left out for the standard rules. */
+  rules?: Rules;
 }
 
 /** A position exported by scripts/export_web_fixtures.py. */
@@ -66,7 +69,7 @@ export function mulberry32(seed: number): () => number {
 }
 
 /** Shuffle and deal 13 cards each; the holder of the 3♦ starts. */
-export function deal(rng: () => number): GameState {
+export function deal(rng: () => number, rules?: Rules): GameState {
   const deck = Array.from({ length: 52 }, (_, i) => i);
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -81,11 +84,28 @@ export function deal(rng: () => number): GameState {
     passes: 0,
     history: [],
     winner: null,
+    ...(rules && !isStandard(rules) ? { rules } : {}),
   };
 }
 
-/** Play `cards` (or pass with `[]`) for the current player. Throws on an illegal move. */
+/**
+ * Play `cards` (or pass with `[]`) for the current player. Throws on an
+ * illegal move. Under the pass and stay out rule, seats that already passed
+ * in this trick then pass automatically until someone can act.
+ */
 export function applyMove(state: GameState, cards: Card[]): GameState {
+  let next = replayMove(state, cards);
+  while (next.winner === null && isOut(next, next.current)) {
+    next = replayMove(next, []);
+  }
+  return next;
+}
+
+/**
+ * One move and nothing after it. For replaying a recorded history, which
+ * already holds every automatic pass.
+ */
+export function replayMove(state: GameState, cards: Card[]): GameState {
   if (state.winner !== null) throw new Error("The game is over");
   const player = state.current;
   const move = [...cards].sort((a, b) => a - b);
