@@ -2,6 +2,7 @@
 import {
   createRoom, heartbeat, joinRoom, makeMove, nextRoomGame, setDisplayName, startRoom, takeOverSeat, turnTimedOut,
 } from "@/lib/online/actions";
+import { STANDARD_RULES, parseRules } from "@/lib/engine/rules";
 import { HttpError, requireUser } from "@/lib/online/server";
 
 const GAMES = [1, 3, 5, 10];
@@ -25,11 +26,14 @@ export async function POST(request: Request) {
         if (!DIFFICULTIES.includes(body.difficulty as string)) bad("Pick a difficulty.");
         if (!GAMES.includes(body.games as number)) bad("Pick a length.");
         if (!TIMERS.includes(body.turnSeconds as number | null)) bad("Pick a turn timer.");
+        // Rooms from clients that predate house rules send none: standard.
+        const rules = body.rules === undefined ? STANDARD_RULES : parseRules(body.rules) ?? bad("Pick the house rules.");
         return Response.json(await createRoom(user, {
           difficulty: body.difficulty as "easy" | "medium" | "hard",
           games: body.games as 1 | 3 | 5 | 10,
           hints: body.hints === true,
           turnSeconds: body.turnSeconds as number | null,
+          rules,
         }));
       }
       case "join":

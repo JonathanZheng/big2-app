@@ -20,6 +20,14 @@ describe("splitState and joinState", () => {
     expect(publicGame.counts).toEqual(state.hands.map((h) => h.length));
     expect(joinState(publicGame, hands)).toEqual(state);
   });
+
+  it("puts the room's house rules back on the state", () => {
+    const rules = { opening: "any", flush: "rank", pass: "out" } as const;
+    const state = deal(mulberry32(3), rules);
+    const { publicGame, hands } = splitState(state, null);
+    expect(joinState(publicGame, hands, rules)).toEqual(state);
+    expect(joinState(publicGame, hands, null)).not.toHaveProperty("rules");
+  });
 });
 
 describe("runBots", () => {

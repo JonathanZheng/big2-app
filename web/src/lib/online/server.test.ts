@@ -132,6 +132,19 @@ describe("loadRoom", () => {
     expect(loaded.game?.state.history).toEqual(state.history);
   });
 
+  it("puts the room's house rules on the game state", async () => {
+    const rules = { opening: "any", flush: "suit", pass: "out" };
+    const gameRow = {
+      version: 1, current: 0, first_move: true, last_play: null, passes: 0, history: [],
+      counts: [13, 13, 13, 13], winner: null, turn_deadline: null,
+    };
+    reply = { data: { ...roomRow, rules, room_seats: seatRows, room_hands: [], room_games: gameRow } };
+    const { loadRoom } = await server();
+    expect((await loadRoom("r1")).game?.state.rules).toEqual(rules);
+    reply = { data: { ...roomRow, rules: null, room_seats: seatRows, room_hands: [], room_games: gameRow } };
+    expect((await loadRoom("r1")).game?.state).not.toHaveProperty("rules");
+  });
+
   it("has no deadline when the game row has none", async () => {
     const state = deal(mulberry32(4));
     reply = {

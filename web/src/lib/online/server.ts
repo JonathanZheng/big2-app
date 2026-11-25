@@ -8,6 +8,7 @@ import { type SupabaseClient, type User, createClient } from "@supabase/supabase
 import { type Difficulty, botMove } from "@/lib/bots/bots";
 import type { Card } from "@/lib/engine/cards";
 import type { GameState } from "@/lib/engine/game";
+import { type Rules, parseRules } from "@/lib/engine/rules";
 import { serverModel } from "./server-model";
 import { type PublicGame, type Seat, joinState, splitState } from "./room-logic";
 
@@ -49,6 +50,8 @@ export interface RoomRow {
   turn_seconds: number | null;
   game_index: number;
   wins: number[];
+  /** House rules, or null for the standard rules. */
+  rules?: Rules | null;
 }
 
 export interface LoadedRoom {
@@ -91,7 +94,7 @@ export async function loadRoom(roomId: string): Promise<LoadedRoom> {
   const state = joinState({
     current: gameRow.current, firstMove: gameRow.first_move, lastPlay: gameRow.last_play, passes: gameRow.passes,
     history: gameRow.history, counts: gameRow.counts, winner: gameRow.winner, turnDeadline: deadline,
-  }, hands);
+  }, hands, parseRules(room.rules));
   return { room, seats, game: { version: gameRow.version, state, deadline } };
 }
 

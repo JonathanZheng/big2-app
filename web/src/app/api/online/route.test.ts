@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { STANDARD_RULES } from "@/lib/engine/rules";
 import { HttpError } from "@/lib/online/server";
 import { POST } from "./route";
 
@@ -52,13 +53,17 @@ describe("POST /api/online", () => {
     await expectError(await post({ ...good, difficulty: "insane" }), 400, "Pick a difficulty.");
     await expectError(await post({ ...good, games: 2 }), 400, "Pick a length.");
     await expectError(await post({ ...good, turnSeconds: 45 }), 400, "Pick a turn timer.");
+    await expectError(await post({ ...good, rules: { opening: "any" } }), 400, "Pick the house rules.");
     expect(mocks.createRoom).not.toHaveBeenCalled();
 
     mocks.createRoom.mockResolvedValue({ id: "r1", code: "ABCDEF" });
     expect(await (await post(good)).json()).toEqual({ id: "r1", code: "ABCDEF" });
-    expect(mocks.createRoom).toHaveBeenCalledWith(user, { difficulty: "hard", games: 3, hints: true, turnSeconds: null });
+    expect(mocks.createRoom).toHaveBeenCalledWith(user, { difficulty: "hard", games: 3, hints: true, turnSeconds: null, rules: STANDARD_RULES });
     await post({ ...good, hints: "yes", turnSeconds: 30 });
-    expect(mocks.createRoom).toHaveBeenLastCalledWith(user, { difficulty: "hard", games: 3, hints: false, turnSeconds: 30 });
+    expect(mocks.createRoom).toHaveBeenLastCalledWith(user, { difficulty: "hard", games: 3, hints: false, turnSeconds: 30, rules: STANDARD_RULES });
+    const rules = { opening: "any", flush: "suit", pass: "out" };
+    await post({ ...good, rules });
+    expect(mocks.createRoom).toHaveBeenLastCalledWith(user, { difficulty: "hard", games: 3, hints: true, turnSeconds: null, rules });
   });
 
   it("joins by code", async () => {

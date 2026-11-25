@@ -149,3 +149,33 @@ describe.skipIf(!APP)("online play", () => {
     expect(room.status).toBe("finished");
   }, 120_000);
 });
+
+describe.skipIf(!APP)("online play under house rules", () => {
+  const rules = { opening: "any", flush: "suit", pass: "out" } as const;
+
+  it("keeps the host's rules on the room and plays every move under them", async () => {
+    const host = await player("dana");
+    expect((await call(host, "name", { name: "Dana" })).status).toBe(200);
+    expect((await call(host, "create", { difficulty: "easy", games: 1, hints: false, turnSeconds: null, rules: { opening: "any" } })).status).toBe(400);
+    const created = await call(host, "create", { difficulty: "easy", games: 1, hints: false, turnSeconds: null, rules });
+    expect(created.status).toBe(200);
+    const roomId = created.body.id as string;
+    const room = (await host.db.from("rooms").select("rules").eq("id", roomId).single()).data!;
+    expect(room.rules).toEqual(rules);
+    expect((await call(host, "start", { roomId })).status).toBe(200);
+
+    for (let turn = 0; turn < 300; turn++) {
+      const { state, seat } = await stateFor(host, roomId);
+      if (state.winner !== null) break;
+      const view = { ...state, rules };
+      expect(state.current).toBe(seat); // bots play every other seat
+      const moves = legalMoves(view, seat);
+      // Prefer a play only the house rules allow, so the server must agree with them.
+      const houseOnly = state.firstMove ? moves.find((m) => m.length > 0 && !m.includes(0)) : undefined;
+      const res = await call(host, "move", { roomId, cards: houseOnly ?? moves.find((m) => m.length > 0) ?? [] });
+      expect(res.status).toBe(200);
+    }
+    const g = (await host.db.from("room_games").select("winner, history").eq("room_id", roomId).single()).data!;
+    expect(g.winner).not.toBeNull();
+  }, 120_000);
+});

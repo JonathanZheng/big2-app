@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { greedyMove } from "@/lib/bots/greedy";
 import { type GameState, deal, mulberry32 } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
+import { STANDARD_RULES } from "@/lib/engine/rules";
 import {
   createRoom, heartbeat, joinRoom, makeMove, nextRoomGame, setDisplayName, startRoom, takeOverSeat, turnTimedOut,
 } from "./actions";
@@ -82,7 +83,16 @@ describe("setDisplayName", () => {
 });
 
 describe("createRoom", () => {
-  const settings = { difficulty: "easy" as const, games: 3 as const, hints: true, turnSeconds: 30 };
+  const settings = { difficulty: "easy" as const, games: 3 as const, hints: true, turnSeconds: 30, rules: STANDARD_RULES };
+
+  it("keeps house rules on the room", async () => {
+    const base = respond;
+    respond = (q) => (is(q, "rooms", "insert") ? { data: { id: "r1", code: "ABCDEF" } } : base(q));
+    const rules = { ...STANDARD_RULES, pass: "out" as const };
+    await createRoom(user(), { ...settings, rules });
+    const [roomInsert] = args(found("rooms", "insert")[0], "insert") as [Record<string, unknown>];
+    expect(roomInsert.rules).toEqual(rules);
+  });
 
   it("asks for a display name first", async () => {
     respond = () => ({ data: null });
@@ -94,7 +104,7 @@ describe("createRoom", () => {
     respond = (q) => (is(q, "rooms", "insert") ? { data: { id: "r1", code: "ABCDEF" } } : base(q));
     await expect(createRoom(user(), settings)).resolves.toEqual({ id: "r1", code: "ABCDEF" });
     const [roomInsert] = args(found("rooms", "insert")[0], "insert") as [Record<string, unknown>];
-    expect(roomInsert).toMatchObject({ host: "u0", difficulty: "easy", games: 3, hints: true, turn_seconds: 30 });
+    expect(roomInsert).toMatchObject({ host: "u0", difficulty: "easy", games: 3, hints: true, turn_seconds: 30, rules: null });
     expect(roomInsert.code).toMatch(/^[A-Z2-9]{6}$/);
     const [seats] = args(found("room_seats", "insert")[0], "insert") as [Record<string, unknown>[]];
     expect(seats.map((s) => s.user_id)).toEqual(["u0", null, null, null]);
@@ -227,6 +237,25 @@ describe("startRoom", () => {
     expect(expected).toBeNull();
     // Bots have played until a person is to move.
     expect(botted[state.current].bot).toBe(false);
+  });
+});
+
+describe("house rules in a room", () => {
+  it("deals the first game under the room's rules", async () => {
+    const rules = { opening: "any" as const, flush: "suit" as const, pass: "out" as const };
+    mocks.loadRoom.mockResolvedValue(loaded({ room: room({ status: "lobby", rules }) }));
+    respond = (q) => (is(q, "rooms", "update") ? { data: [{ id: "r1" }] } : {});
+    await startRoom(user(), "r1");
+    const [, state] = mocks.saveGame.mock.calls[0] as unknown as [LoadedRoom, GameState];
+    expect(state.rules).toEqual(rules);
+  });
+
+  it("deals standard games for a room without rules", async () => {
+    mocks.loadRoom.mockResolvedValue(loaded({ room: room({ status: "lobby" }) }));
+    respond = (q) => (is(q, "rooms", "update") ? { data: [{ id: "r1" }] } : {});
+    await startRoom(user(), "r1");
+    const [, state] = mocks.saveGame.mock.calls[0] as unknown as [LoadedRoom, GameState];
+    expect(state).not.toHaveProperty("rules");
   });
 });
 

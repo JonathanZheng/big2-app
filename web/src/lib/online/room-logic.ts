@@ -5,6 +5,7 @@
 import type { Card } from "@/lib/engine/cards";
 import { type GameState, type Play, applyMove } from "@/lib/engine/game";
 import { legalMoves } from "@/lib/engine/legal";
+import type { Rules } from "@/lib/engine/rules";
 
 /** A seat may be handed to a bot after this long without contact. */
 export const TAKEOVER_AFTER_MS = 60_000;
@@ -49,7 +50,8 @@ export function splitState(state: GameState, turnDeadline: number | null): { pub
   };
 }
 
-export function joinState(g: PublicGame, hands: Card[][]): GameState {
+/** The full state from the public game, the hands and the room's house rules (null for standard). */
+export function joinState(g: PublicGame, hands: Card[][], rules: Rules | null = null): GameState {
   return {
     hands: hands.map((h) => [...h]),
     current: g.current,
@@ -58,6 +60,7 @@ export function joinState(g: PublicGame, hands: Card[][]): GameState {
     passes: g.passes,
     history: g.history,
     winner: g.winner,
+    ...(rules ? { rules } : {}),
   };
 }
 
