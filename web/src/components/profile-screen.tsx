@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AccentPicker } from "@/components/accent-picker";
 import { AccountSection } from "@/components/account-section";
+import { RatingChart } from "@/components/rating-chart";
 import { ReviewPanel } from "@/components/review-panel";
 import { readAccount, subscribeHistory } from "@/lib/account/store";
 import { resetAccountHistory } from "@/lib/account/sync";
@@ -12,6 +13,7 @@ import { MoveType } from "@/lib/engine/moves";
 import { ModelClient } from "@/lib/model/client";
 import { type SlipKind, summariseAnalyses } from "@/lib/session/analysis";
 import { type GameRecord, clearProfile, readGameRecords, summarise } from "@/lib/session/profile";
+import { type FormGroup, form, summariseRating } from "@/lib/session/rating";
 import { type SavedReview, deleteSavedReview, readSavedReviews } from "@/lib/session/saved-reviews";
 import { readStats } from "@/lib/session/stats";
 
@@ -54,11 +56,12 @@ export function ProfileScreen() {
     if (raw === null) return null;
     const [records, stats, reviews, signedIn] = JSON.parse(raw) as [GameRecord[], ReturnType<typeof readStats>, SavedReview[], boolean];
     const play = summariseAnalyses(records.flatMap((r) => (r.analysis ? [r.analysis] : [])));
-    return { profile: summarise(records), stats, reviews, play, signedIn };
+    return { profile: summarise(records), rating: summariseRating(records), recentForm: form(records), stats, reviews, play, signedIn };
   }, [raw]);
 
   if (!data) return <p className="font-mono text-sm">LOADING STATS...</p>;
-  const { profile: p, stats, reviews, play, signedIn } = data;
+  const { profile: p, rating, recentForm, stats, reviews, play, signedIn } = data;
+  const ratedAt = new Map(rating?.history.map((g) => [g.at, g]));
 
   async function reset() {
     setResetError(null);
@@ -114,6 +117,35 @@ export function ProfileScreen() {
             <Tile label="WIN STREAK" value={p.currentStreak} note={`BEST ${p.bestStreak}`} />
             <Tile label="MATCHES WON" value={stats.matchWins} note={`OF ${stats.matches}`} />
           </div>
+
+          {rating && (
+            <Section title="SKILL RATING">
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-7xl font-black leading-none tracking-tighter">{rating.rating}</span>
+                  <span className="font-mono text-xs">{signed(rating.change)} LAST GAME · BEST {rating.best}</span>
+                </div>
+                <p className="font-mono text-sm max-w-md">
+                  {rating.level === null
+                    ? "BELOW THE EASY BOTS FOR NOW."
+                    : `AT OR ABOVE THE ${rating.level.toUpperCase()} BOTS.`}{" "}
+                  EVERYONE STARTS AT 1000. A WIN AGAINST STRONGER BOTS COUNTS FOR MORE, AND A LOSS TO THEM COSTS LESS.
+                </p>
+              </div>
+              <RatingChart history={rating.history} />
+            </Section>
+          )}
+
+          {recentForm.length > 1 && (
+            <Section title="FORM">
+              <p className="font-mono text-xs">YOUR GAMES IN GROUPS OF TEN, OLDEST FIRST. THE LAST GROUP IS YOUR LATEST TEN.</p>
+              <div className="grid md:grid-cols-2 gap-6">
+                <FormBars title="WIN RATE" groups={recentForm} value={(g) => g.winRate} max={100} format={(n) => `${n}%`} />
+                <FormBars title="CARDS LEFT WHEN YOU LOSE" groups={recentForm} value={(g) => g.avgCardsLeftWhenLosing} max={13}
+                  format={(n) => String(n)} />
+              </div>
+            </Section>
+          )}
 
           <Section title="BY DIFFICULTY">
             <div className="grid sm:grid-cols-3 gap-4">
@@ -205,7 +237,8 @@ export function ProfileScreen() {
                     <th className="py-2 pr-4">RESULT</th>
                     <th className="py-2 pr-4">DIFFICULTY</th>
                     <th className="py-2 pr-4">CARDS LEFT</th>
-                    <th className="py-2">HINTS</th>
+                    <th className="py-2 pr-4">HINTS</th>
+                    <th className="py-2">RATING</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,7 +247,10 @@ export function ProfileScreen() {
                       <td className={`py-2 pr-4 font-semibold ${r.won ? "" : "opacity-60"}`}>{r.won ? "WON" : "LOST"}</td>
                       <td className="py-2 pr-4">{r.difficulty.toUpperCase()}</td>
                       <td className="py-2 pr-4">{r.cardsLeft}</td>
-                      <td className="py-2">{r.hints}</td>
+                      <td className="py-2 pr-4">{r.hints}</td>
+                      <td className="py-2">
+                        {ratedAt.get(r.at) ? `${ratedAt.get(r.at)!.rating} (${signed(ratedAt.get(r.at)!.change)})` : ""}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -271,6 +307,30 @@ export function ProfileScreen() {
           saved
         />
       )}
+    </div>
+  );
+}
+
+const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+/** One bar per group of ten games, in the style of the slips chart. A group with no value shows a dash. */
+function FormBars({ title, groups, value, max, format }: {
+  title: string; groups: FormGroup[]; value: (g: FormGroup) => number | null; max: number; format: (n: number) => string;
+}) {
+  const values = groups.map(value);
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-mono text-xs font-semibold">{title}</span>
+      <div className="flex items-end gap-1.5 h-28 border-b-3 border-ink" role="img"
+        aria-label={`${title.toLowerCase()} by group of ten games, oldest first: ${values.map((v) => (v === null ? "none" : format(v))).join(", ")}`}>
+        {values.map((v, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 h-full" title={`${groups[i].games} GAMES`}>
+            <span className="font-mono text-[11px]">{v === null ? "-" : format(v)}</span>
+            <div className={`w-full ${i === values.length - 1 ? "bg-accent" : "bg-ink"}`}
+              style={{ height: `${((v ?? 0) / max) * 70}%` }} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
