@@ -25,7 +25,8 @@ import {
   playMove, seatNames, startMatch,
 } from "@/lib/session/match";
 import { analyseGame } from "@/lib/session/analysis";
-import { attachAnalysis, gameRecord, saveGameRecord } from "@/lib/session/profile";
+import { attachAnalysis, gameRecord, readGameRecords, saveGameRecord } from "@/lib/session/profile";
+import { summariseRating } from "@/lib/session/rating";
 import { playSound } from "@/lib/sound/play";
 import { saveReview } from "@/lib/session/saved-reviews";
 import { recordGame, recordMatch } from "@/lib/session/stats";
@@ -419,6 +420,8 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
   // The result waits a beat after the last card, so its landing is seen
   // before the dialog covers the table.
   const [resultFor, setResultFor] = useState<GameState | null>(null);
+  // Read once the result shows, a beat after the game was saved above.
+  const rating = useMemo(() => (resultFor && !friends ? summariseRating(readGameRecords()) : null), [resultFor, friends]);
   useEffect(() => {
     if (game.winner === null) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -750,6 +753,7 @@ function Game({ initial, getClient, onNewMatch, onRestart, names }: {
           onEnd={() => setMatch(endMatch(match))}
           onNewMatch={onNewMatch}
           onReview={() => setReviewing(true)}
+          rating={rating}
         />
       )}
       {reviewing && (
@@ -804,8 +808,10 @@ function Confirm({ title, detail, confirm, onConfirm, onCancel }: {
   );
 }
 
-function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
+function Result({ match, names, onNext, onEnd, onNewMatch, onReview, rating }: {
   match: MatchState; names: string[]; onNext: () => void; onEnd: () => void; onNewMatch: () => void; onReview: () => void;
+  /** Vs bots only: the rating after this game. */
+  rating: { rating: number; change: number } | null;
 }) {
   const winner = match.game.winner!;
   const winners = matchWinners(match);
@@ -833,6 +839,11 @@ function Result({ match, names, onNext, onEnd, onNewMatch, onReview }: {
               {leftover.map((c) => <CardFace key={c} card={c} compact className="w-8 h-11 shadow-brutal-sm" />)}
             </div>
           </div>
+        )}
+        {rating && (
+          <p className="font-mono text-sm">
+            RATING {rating.rating} <strong>({rating.change > 0 ? `+${rating.change}` : rating.change})</strong>
+          </p>
         )}
         {match.config.games > 1 && (
           <div className="grid grid-cols-4 border-3 border-ink">
