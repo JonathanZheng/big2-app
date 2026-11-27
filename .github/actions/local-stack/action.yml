@@ -4,6 +4,15 @@ description: Starts a local Supabase with every migration applied, then builds a
 runs:
   using: composite
   steps:
+    # Supabase listens on 54320 to 54329, inside Linux's default range for
+    # outgoing connections (32768 to 60999). A download can then hold one of
+    # those ports when Supabase starts, which fails with "address already in
+    # use". Moving the outgoing range above them, before anything connects,
+    # keeps them free.
+    - name: Keep the Supabase ports free
+      shell: bash
+      run: sudo sysctl -w net.ipv4.ip_local_port_range="55000 65000"
+
     - uses: actions/setup-node@v4
       with:
         node-version: 24
