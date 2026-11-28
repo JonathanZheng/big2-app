@@ -7,7 +7,10 @@ import { MODEL } from "@/lib/model/current";
 import { Network, type WeightsManifest } from "@/lib/model/network";
 import { readQueue } from "@/lib/account/store";
 import { signedIn } from "@/lib/account/test-helpers";
-import { type Puzzle, dayKey, puzzleFor, puzzleState, readGuestResults, readResults, saveResult, streak } from "./puzzle";
+import {
+  PUZZLE_LAUNCH, type Puzzle, archiveDays, dayKey, isArchiveDay, parseDay, puzzleFor, puzzleState, readGuestResults, readResults,
+  saveResult, streak,
+} from "./puzzle";
 
 const publicDir = path.resolve(__dirname, "../../../public");
 const puzzles = JSON.parse(readFileSync(path.join(publicDir, "puzzles.json"), "utf8")) as Puzzle[];
@@ -65,6 +68,51 @@ describe("results and streak", () => {
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); } });
     expect(readResults()).toEqual({});
     expect(() => saveResult("2026-10-31", { cards: [], label: "Best" })).not.toThrow();
+  });
+});
+
+describe("archive", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads only real calendar days", () => {
+    expect(dayKey(parseDay("2026-11-03")!)).toBe("2026-11-03");
+    expect(parseDay("2026-02-30")).toBeNull();
+    expect(parseDay("2026-1-3")).toBeNull();
+    expect(parseDay("yesterday")).toBeNull();
+    expect(parseDay(null)).toBeNull();
+  });
+
+  it("lists every day from launch up to yesterday, newest first", () => {
+    const days = archiveDays(new Date(2026, 10, 5));
+    expect(days[0]).toBe("2026-11-04");
+    expect(days.at(-1)).toBe(PUZZLE_LAUNCH);
+    expect(days).toHaveLength(5); // 31 Oct to 4 Nov
+    expect(archiveDays(new Date(2026, 9, 31))).toEqual([]); // launch day: nothing past yet
+  });
+
+  it("goes back at most a year, so no puzzle shows twice", () => {
+    const days = archiveDays(new Date(2028, 0, 1));
+    expect(days).toHaveLength(364);
+    expect(new Set(days.map((d) => puzzleFor(parseDay(d)!, 365))).size).toBe(364);
+  });
+
+  it("opens past days only, not today, the future or before launch", () => {
+    const today = new Date(2026, 10, 5);
+    expect(isArchiveDay("2026-11-04", today)).toBe(true);
+    expect(isArchiveDay(PUZZLE_LAUNCH, today)).toBe(true);
+    expect(isArchiveDay("2026-11-05", today)).toBe(false);
+    expect(isArchiveDay("2026-11-06", today)).toBe(false);
+    expect(isArchiveDay("2026-10-30", today)).toBe(false);
+  });
+
+  it("does not count late answers towards the streak", () => {
+    const data = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) });
+    saveResult("2026-11-03", { cards: [1], label: "Best" });
+    saveResult("2026-11-04", { cards: [1], label: "Best", late: true });
+    saveResult("2026-11-05", { cards: [1], label: "Best" });
+    expect(readResults()["2026-11-04"].late).toBe(true);
+    expect(streak(readResults(), new Date(2026, 10, 5))).toBe(1);
   });
 });
 

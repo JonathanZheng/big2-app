@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AdvicePanel, type AdviceStatus } from "@/components/advice-panel";
 import { CardRow } from "@/components/card";
@@ -13,13 +15,16 @@ import { type Label, evaluation, rankAdvice } from "@/lib/model/advice";
 import { ModelClient } from "@/lib/model/client";
 import { subscribeHistory } from "@/lib/account/store";
 import {
-  type Puzzle, type PuzzleResult, dayKey, puzzleFor, puzzleState, readResults, saveResult, streak,
+  type Puzzle, type PuzzleResult, archiveDays, dayKey, isArchiveDay, parseDay, puzzleFor, puzzleState, readResults, saveResult,
+  streak,
 } from "@/lib/puzzle/puzzle";
 
 const button = "border-3 border-ink font-extrabold disabled:opacity-40 disabled:cursor-not-allowed";
 const key = (cards: Card[]) => [...cards].sort((a, b) => a - b).join(",");
 const RELATIVE = ["You", "West", "North", "East"];
 const formatEval = (v: number) => (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1));
+const longDay = (day: string) =>
+  parseDay(day)!.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }).toUpperCase();
 
 const VERDICT: Record<Label, string> = {
   Best: "SOLVED. THAT IS THE BOT'S BEST MOVE.",
@@ -32,7 +37,9 @@ const VERDICT: Record<Label, string> = {
 // Results live in localStorage (this browser's, or the account copy); read them on every render on the client.
 const subscribe = subscribeHistory;
 
+/** Today's puzzle, or a past day's from the archive with `?day=YYYY-MM-DD`. */
 export function PuzzleScreen() {
+  const requested = useSearchParams().get("day");
   const [puzzles, setPuzzles] = useState<Puzzle[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [, setVersion] = useState(0);
@@ -58,28 +65,37 @@ export function PuzzleScreen() {
   const getClient = useCallback(() => (client.current ??= new ModelClient()), []);
   useEffect(() => () => client.current?.dispose(), []);
 
-  if (loadError) return <p className="font-mono text-sm">TODAY&apos;S PUZZLE COULD NOT LOAD. CHECK YOUR CONNECTION AND REFRESH.</p>;
-  if (!puzzles || resultsRaw === null || today === null || day === null) return <p className="font-mono text-sm">LOADING TODAY&apos;S PUZZLE...</p>;
+  if (loadError) return <p className="font-mono text-sm">THE PUZZLE COULD NOT LOAD. CHECK YOUR CONNECTION AND REFRESH.</p>;
+  if (!puzzles || resultsRaw === null || today === null || day === null) return <p className="font-mono text-sm">LOADING THE PUZZLE...</p>;
 
   const results = JSON.parse(resultsRaw) as Record<string, PuzzleResult>;
-  const index = puzzleFor(today, puzzles.length);
+  // A day outside the archive (today, the future, before launch, or not a date) falls back to today's puzzle.
+  const archive = requested !== null && isArchiveDay(requested, today);
+  const playDay = archive ? requested : day;
+  const index = puzzleFor(parseDay(playDay)!, puzzles.length);
+  const missed = archiveDays(today).filter((d) => !results[d] && d !== playDay);
   return (
     <Board
-      key={day}
+      key={playDay}
       puzzle={puzzles[index]}
       number={index + 1}
-      result={results[day] ?? null}
+      day={playDay}
+      archive={archive}
+      notice={requested !== null && !archive && requested !== day ? "THAT DAY IS NOT IN THE ARCHIVE, SO HERE IS TODAY'S PUZZLE." : null}
+      nextMissed={missed[0] ?? null}
+      result={results[playDay] ?? null}
       solved={Object.values(results).filter((r) => r.label === "Best").length}
       played={Object.keys(results).length}
       streak={streak(results, today)}
       getClient={getClient}
-      onAnswer={(r) => { saveResult(day, r); setVersion((v) => v + 1); }}
+      onAnswer={(r) => { saveResult(playDay, archive ? { ...r, late: true } : r); setVersion((v) => v + 1); }}
     />
   );
 }
 
-function Board({ puzzle, number, result, solved, played, streak: run, getClient, onAnswer }: {
-  puzzle: Puzzle; number: number; result: PuzzleResult | null; solved: number; played: number; streak: number;
+function Board({ puzzle, number, day, archive, notice, nextMissed, result, solved, played, streak: run, getClient, onAnswer }: {
+  puzzle: Puzzle; number: number; day: string; archive: boolean; notice: string | null; nextMissed: string | null;
+  result: PuzzleResult | null; solved: number; played: number; streak: number;
   getClient: () => ModelClient; onAnswer: (r: PuzzleResult) => void;
 }) {
   const state = useMemo(() => puzzleState(puzzle), [puzzle]);
@@ -134,13 +150,20 @@ function Board({ puzzle, number, result, solved, played, streak: run, getClient,
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-5xl font-black tracking-tight leading-none">DAILY PUZZLE</h1>
-          <p className="font-mono text-xs">PUZZLE {number}. FIND THE BOT&apos;S BEST MOVE. ONE TRY A DAY.</p>
+          <p className="font-mono text-xs">
+            {archive
+              ? <>PUZZLE {number} FROM {longDay(day)}. ONE TRY. IT COUNTS AS SOLVED, NOT TOWARDS YOUR STREAK.</>
+              : <>PUZZLE {number}. FIND THE BOT&apos;S BEST MOVE. ONE TRY A DAY.</>}
+          </p>
         </div>
-        <div className="flex gap-3 font-mono text-xs">
+        <div className="flex flex-wrap gap-3 font-mono text-xs">
+          <Link href="/puzzle/archive" className="flex items-center border-3 border-ink bg-card px-3 py-2 shadow-brutal-sm font-extrabold hover:bg-accent">ARCHIVE</Link>
           <span className="border-3 border-ink bg-card px-3 py-2 shadow-brutal-sm">STREAK <strong className="text-base">{run}</strong></span>
           <span className="border-3 border-ink bg-card px-3 py-2 shadow-brutal-sm">SOLVED <strong className="text-base">{solved}</strong> OF {played}</span>
         </div>
       </div>
+
+      {notice && <p className="border-3 border-ink bg-card p-3 font-mono text-sm">{notice}</p>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-5 min-w-0">
@@ -161,7 +184,21 @@ function Board({ puzzle, number, result, solved, played, streak: run, getClient,
                   {topEval !== null && <span>SCORE {formatEval(topEval)}</span>}
                 </div>
               )}
-              <p className="font-mono text-xs">A NEW PUZZLE EVERY DAY. {result.label === "Best" ? "KEEP THE STREAK GOING." : ""}</p>
+              <p className="font-mono text-xs">
+                {archive
+                  ? result.late ? "ANSWERED FROM THE ARCHIVE." : "ANSWERED ON THE DAY."
+                  : `A NEW PUZZLE EVERY DAY. ${result.label === "Best" ? "KEEP THE STREAK GOING." : ""}`}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {nextMissed && (
+                  <Link href={`/puzzle?day=${nextMissed}`} className={`${button} px-4 py-2 text-sm bg-accent shadow-brutal-sm`}>
+                    {archive ? "NEXT MISSED PUZZLE" : "PLAY A MISSED PUZZLE"}
+                  </Link>
+                )}
+                <Link href={archive ? "/puzzle" : "/puzzle/archive"} className={`${button} px-4 py-2 text-sm bg-card shadow-brutal-sm`}>
+                  {archive ? "TODAY'S PUZZLE" : "ARCHIVE"}
+                </Link>
+              </div>
             </section>
           ) : (
             <>
