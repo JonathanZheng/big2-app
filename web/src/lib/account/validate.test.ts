@@ -40,6 +40,12 @@ describe("parseBundle", () => {
     rejects({ puzzles: { "2026-11-01": { cards: [], label: "Great" } } });
     rejects({ puzzles: { "2026-11-01": { cards: ["3"], label: "Good" } } });
     rejects({ puzzles: { "2026-11-01": { cards: [52], label: "Good" } } });
+    rejects({ puzzles: { "2026-11-01": { cards: [], label: "Good", late: "yes" } } });
+  });
+
+  it("accepts a late answer from the puzzle archive", () => {
+    const late = { cards: [3], label: "Best", late: true };
+    expect(parseBundle({ puzzles: { "2026-11-01": late } })?.puzzles["2026-11-01"]).toEqual(late);
   });
 
   it("rejects matchWins above matches", () => {

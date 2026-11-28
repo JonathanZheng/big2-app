@@ -57,7 +57,8 @@ function isReview(r: unknown): r is SavedReview {
     && fits(r, MAX_REVIEW_BYTES);
 }
 
-const isPuzzle = (p: unknown): p is PuzzleResult => isObject(p) && isCards(p.cards) && p.cards.length <= 13 && LABELS.includes(p.label as Label);
+const isPuzzle = (p: unknown): p is PuzzleResult => isObject(p) && isCards(p.cards) && p.cards.length <= 13
+  && LABELS.includes(p.label as Label) && (p.late === undefined || p.late === true);
 
 /** The bundle, or null when it is not valid. */
 export function parseBundle(value: unknown): HistoryBundle | null {
